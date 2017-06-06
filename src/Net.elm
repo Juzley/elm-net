@@ -5,6 +5,8 @@ import Element
 import Mouse
 import Board
 import Random
+import Task
+import Time
 
 main =
   Html.program
@@ -20,7 +22,7 @@ main =
 type alias Model = Board.Board
 
 init : (Model, Cmd Msg)
-init = (Board.makeBoard, Cmd.none)
+init = (Board.emptyBoard 5, Cmd.none)
 
 
 -- Update
@@ -28,7 +30,7 @@ init = (Board.makeBoard, Cmd.none)
 type Msg =
     MouseMsg Mouse.Position
   | NewGameMsg
-  | GenerateMsg Board.GenerationInfo Int
+  | NewBoardMsg Time.Time
 
 
 -- TODO: Derive these from collage width and height, share with render.
@@ -53,25 +55,13 @@ update msg model =
   case msg of
     MouseMsg mousePos ->
       updateRotation mousePos model
-      |> Board.updateConnections
       |> (\m -> (m, Cmd.none))
 
     NewGameMsg ->
-      let (board, state, genInfo, randVal) = Board.startGenerate in
-      case state of
-        Board.Finished -> (board, Cmd.none)
-        Board.InProgress ->
-          (board, Random.generate (GenerateMsg genInfo) (Random.int 1 randVal))
+        (model, Task.perform NewBoardMsg Time.now)
 
-    GenerateMsg genInfo randVal ->
-      let
-        (board, state, newGenInfo, newRandVal) =
-          Board.contGenerate model genInfo randVal
-      in
-        case state of
-          Board.Finished -> (board, Cmd.none)
-          Board.InProgress ->
-            (board, Random.generate (GenerateMsg newGenInfo) (Random.int 1 newRandVal))
+    NewBoardMsg time ->
+        (Board.generateBoard 5 <| Random.initialSeed <| round time, Cmd.none)
 
 
 -- Subscriptions

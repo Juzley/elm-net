@@ -1,7 +1,7 @@
 module Board exposing
   ( Board, Tile, TilePos
-  , TileType(..), Rotation(..), GenerationState(..), GenerationInfo
-  , startGenerate, contGenerate, makeBoard, rotateTile, updateConnections
+  , TileType(..), Rotation(..)
+  , emptyBoard, generateBoard, rotateTile
   , renderBoard
   )
 
@@ -11,14 +11,12 @@ import Dict
 import Set
 import Color
 import Collage
+import Random
+import Debug
 import Util exposing (..)
 
 
 -- TYPES
-
-type GenerationState = InProgress | Finished
-
-type alias GenerationInfo = List Int
 
 type Direction = Up | Right | Down | Left
 
@@ -56,21 +54,6 @@ getTile : Board -> TilePos -> Maybe Tile
 getTile board pos =
   Dict.get pos board.tiles
 
-{-| Create a new board -}
-makeBoard : Board
-makeBoard =
-  Board 3 (Dict.fromList
-    [((0, 0), (Tile 0 0 Normal False [True, False, False, False] [False, False, False, False])),
-     ((1, 0), (Tile 1 0 Normal False [True, False, True, False] [False, False, False, False])),
-     ((2, 0), (Tile 2 0 Normal False [True, True, False, False] [False, False, False, False])),
-     ((0, 1), (Tile 0 1 Normal False [True, False, False, False] [False, False, False, False])),
-     ((1, 1), (Tile 1 1 Source True [True, False, False, False] [True, False, False, False])),
-     ((2, 1), (Tile 2 1 Normal False [False, True, False, True] [False, False, False, False])),
-     ((0, 2), (Tile 0 2 Normal False [True, True, False, False] [False, False, False, False])),
-     ((1, 2), (Tile 1 2 Normal False [True, True, True, False] [False, False, False, False])),
-     ((2, 2), (Tile 2 2 Normal False [True, True, False, False] [False, False, False, False]))])
-  |> updateConnections
-
 
 -- INPUT HANDLING
 
@@ -88,6 +71,7 @@ rotateTile pos dir board =
       (Nothing, _) -> Nothing)
   in
     { board | tiles = Dict.update pos rotateFn board.tiles }
+    |> updateConnections
 
 
 -- CONNECTION HANDLING
@@ -230,14 +214,124 @@ resetConnections board =
 
 -- BOARD GENERATION
 
-startGenerate : (Board, GenerationState, GenerationInfo, Int)
-startGenerate =
-  (makeBoard, InProgress, [], 4)
+{-| Create an empty tile for the given position. -}
+emptyTile : Int -> TilePos -> Tile
+emptyTile size (x, y) =
+  let
+    mid = size // 2
+    tileType = if x == mid && y == mid then Source else Normal
+    falses = List.repeat 4 False
+  in
+    Tile x y tileType False falses falses
 
-contGenerate : Board -> List a -> Int -> (Board, GenerationState, GenerationInfo, Int)
-contGenerate board genInfo randVal =
-  let _ = Debug.log "rand" randVal in
-  (board, Finished, [], 0)
+
+{-| Create tiles for an empty board. -}
+emptyBoardTiles : Int -> Dict.Dict TilePos Tile
+emptyBoardTiles size =
+  let coords = List.range 0 (size - 1) in
+  listProduct coords coords
+  |> List.map (\pos -> (pos, emptyTile size pos))
+  |> Dict.fromList
+
+
+{-| Create an empty board of a given size. -}
+emptyBoard : Int -> Board
+emptyBoard size =
+  Board size (emptyBoardTiles size)
+
+
+{-| Get the number of edges of a tile that don't currently have a connection.
+-}
+remainingConnections : Board -> TilePos -> Int
+remainingConnections board pos =
+    case getTile board pos of
+        Just t ->
+            t.connections
+            |> List.map (\c -> if c then 0 else 1)
+            |> List.sum
+        Nothing -> 0
+
+
+{-| Get a list of surrounding tiles which haven't yet been visisted (i.e.
+have no connections yet). A list of the tiles, along with the direction to
+that tile from the start location, is returned.
+-}
+availablePaths : Board -> TilePos -> List (Direction, Tile)
+availablePaths board pos =
+    tileNeighbours (getTile board pos) board
+    |> List.map
+        (\tile -> case tile of
+            Just t -> t
+            Nothing -> emptyTile 0 (0, 0))
+    |> zipList [Up, Right, Down, Left]
+    |> List.filter (\(d, t) -> remainingConnections board (t.x, t.y) == 4)
+
+
+{-| Make a connection from a given tile in a given direction. -}
+connectTile : Tile -> Direction -> Board -> Board
+connectTile tile dir board =
+    let
+        newConnections =
+            zipList [Up, Right, Down, Left] tile.connections
+            |> List.map (\(d, c) -> if d == dir then True else c)
+        updateFn = (\dt -> case dt of
+            Just t -> Just {t | connections = newConnections }
+            Nothing -> Nothing)
+    in
+        { board | tiles = Dict.update (tile.x, tile.y) updateFn board.tiles }
+
+
+{-| Connection two tiles. -}
+connectTiles : Tile -> Direction -> Tile -> Board -> Board
+connectTiles src dir dst board =
+    let opposite = oppositeDir dir in
+        board |> connectTile src dir |> connectTile dst opposite
+
+
+{-| Make a new connection from a given tile, before moving onto the next
+iteration of board generation.
+-}
+makeNewConnection : TilePos -> List (TilePos) -> Random.Seed -> Board -> Board
+makeNewConnection pos queue seed board =
+    let
+        paths = availablePaths board pos
+        pathCount = List.length paths
+        (selected, newSeed) = Random.step (Random.int 1 (pathCount)) seed
+        path = List.drop (selected - 1) paths |> List.head
+        tile = getTile board pos 
+    in
+        case (tile, path) of
+            (Just src, Just (dir, dst)) ->
+                connectTiles src dir dst board
+                |> generateBoardHelper ((dst.x, dst.y)::pos::queue) newSeed 
+            _ -> generateBoardHelper queue newSeed board
+
+
+{-| Recursive helper function used by generateBoard to generate a new board.
+Maintains a queue of tiles to form connections from, performing a depth-first
+traversal of the board.
+-}
+generateBoardHelper : List (TilePos) -> Random.Seed -> Board -> Board
+generateBoardHelper queue seed board =
+    case Debug.log "queue" queue of 
+        q::qs ->
+            let pathCount = List.length (availablePaths board q) in
+            if remainingConnections board q <= 1 || pathCount == 0 then
+                generateBoardHelper qs seed board
+            else
+                makeNewConnection q qs seed board
+        [] -> updateConnections board
+
+
+{-| Generate a new board layout of a given size. -}
+generateBoard : Int -> Random.Seed -> Board
+generateBoard size seed = 
+  let
+      board = emptyBoard size
+      mid = size // 2
+      centerPos = (mid, mid)
+  in
+      generateBoardHelper [centerPos] seed board
   
 
 -- BOARD RENDERING
