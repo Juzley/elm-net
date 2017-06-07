@@ -17,7 +17,6 @@ import Set
 import Color
 import Collage
 import Random
-import Debug
 import Util exposing (..)
 
 
@@ -458,7 +457,7 @@ traversal of the board.
 -}
 generateBoardHelper : List TilePos -> Random.Seed -> Board -> Board
 generateBoardHelper queue seed board =
-    case Debug.log "queue" queue of
+    case queue of
         q :: qs ->
             let
                 pathCount =
@@ -471,6 +470,92 @@ generateBoardHelper queue seed board =
 
         [] ->
             updateConnections board
+
+
+{-| Place a single barrier on the given side of a given tile, only if a
+connection isn't needed through that edge.
+-}
+placeBarrier : Tile -> Direction -> Bool -> Board -> Board
+placeBarrier tile dir value board =
+    let
+        merge =
+            case dir of
+                Up ->
+                    [ value, False, False, False ]
+
+                Right ->
+                    [ False, value, False, False ]
+
+                Down ->
+                    [ False, False, value, False ]
+
+                Left ->
+                    [ False, False, False, value ]
+
+        barriers =
+            List.map3 (\bar mer con -> (bar || mer) && not con)
+                tile.barriers
+                merge
+                tile.connections
+
+        updateTile =
+            (\_ -> Just { tile | barriers = barriers })
+    in
+        { board | tiles = Dict.update ( tile.x, tile.y ) updateTile board.tiles }
+
+
+{-| Place barriers for an individual tile. This function also updates the
+neighbouring tiles with the barriers.
+-}
+placeTileBarriers : ( TilePos, ( Bool, Bool ) ) -> Board -> Board
+placeTileBarriers ( pos, ( vert, horiz ) ) board =
+    let
+        tile =
+            getTile board pos
+
+        neighbours =
+            tileNeighbours tile board
+    in
+        case ( tile, neighbours ) of
+            ( Just t, [ Just up, Just right, _, _ ] ) ->
+                board
+                    |> placeBarrier t Up vert
+                    |> placeBarrier t Right horiz
+                    |> placeBarrier up Down vert
+                    |> placeBarrier right Left horiz
+
+            _ ->
+                board
+
+
+{-| Randomly place barriers on the grid in places where connections aren't
+required.
+-}
+placeBarriers : Random.Seed -> Board -> Board
+placeBarriers seed board =
+    let
+        range =
+            List.range 0 (board.size - 1)
+
+        coords =
+            listProduct range range
+
+        barrierChance =
+            0.2
+
+        gen =
+            (Random.map ((>) barrierChance) (Random.float 0 1))
+
+        comboGen =
+            Random.map2 (,) gen gen
+
+        listGen =
+            Random.list (List.length coords) comboGen
+
+        ( barrierDecisions, _ ) =
+            Random.step listGen seed
+    in
+        List.foldl placeTileBarriers board (zipList coords barrierDecisions)
 
 
 {-| Generate a new board layout of a given size.
@@ -488,6 +573,7 @@ generateBoard size seed =
             ( mid, mid )
     in
         generateBoardHelper [ centerPos ] seed board
+            |> placeBarriers seed
 
 
 
