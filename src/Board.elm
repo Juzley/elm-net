@@ -428,8 +428,8 @@ connectTiles src dir dst board =
 {-| Make a new connection from a given tile, before moving onto the next
 iteration of board generation.
 -}
-makeNewConnection : TilePos -> List TilePos -> Random.Seed -> Board -> Board
-makeNewConnection pos queue seed board =
+makeNewConnection : TilePos -> List TilePos -> ( Random.Seed, Board ) -> ( Random.Seed, Board )
+makeNewConnection pos queue ( seed, board ) =
     let
         paths =
             availablePaths board pos
@@ -448,19 +448,22 @@ makeNewConnection pos queue seed board =
     in
         case ( tile, path ) of
             ( Just src, Just ( dir, dst ) ) ->
-                connectTiles src dir dst board
-                    |> generateBoardHelper (( dst.x, dst.y ) :: pos :: queue) newSeed
+                let
+                    newBoard =
+                        connectTiles src dir dst board
+                in
+                    generateBoardHelper (( dst.x, dst.y ) :: pos :: queue) ( newSeed, newBoard )
 
             _ ->
-                generateBoardHelper queue newSeed board
+                generateBoardHelper queue ( newSeed, board )
 
 
 {-| Recursive helper function used by generateBoard to generate a new board.
 Maintains a queue of tiles to form connections from, performing a depth-first
 traversal of the board.
 -}
-generateBoardHelper : List TilePos -> Random.Seed -> Board -> Board
-generateBoardHelper queue seed board =
+generateBoardHelper : List TilePos -> ( Random.Seed, Board ) -> ( Random.Seed, Board )
+generateBoardHelper queue ( seed, board ) =
     case queue of
         q :: qs ->
             let
@@ -468,12 +471,12 @@ generateBoardHelper queue seed board =
                     List.length (availablePaths board q)
             in
                 if remainingConnections board q <= 1 || pathCount == 0 then
-                    generateBoardHelper qs seed board
+                    generateBoardHelper qs ( seed, board )
                 else
-                    makeNewConnection q qs seed board
+                    makeNewConnection q qs ( seed, board )
 
         [] ->
-            updateConnections board
+            ( seed, board )
 
 
 {-| Place a single barrier on the given side of a given tile, only if a
@@ -535,8 +538,8 @@ placeTileBarriers ( pos, ( vert, horiz ) ) board =
 {-| Randomly place barriers on the grid in places where connections aren't
 required.
 -}
-placeBarriers : Random.Seed -> Board -> Board
-placeBarriers seed board =
+placeBarriers : ( Random.Seed, Board ) -> ( Random.Seed, Board )
+placeBarriers ( seed, board ) =
     let
         range =
             List.range 0 (board.size - 1)
@@ -556,10 +559,47 @@ placeBarriers seed board =
         listGen =
             Random.list (List.length coords) comboGen
 
-        ( barrierDecisions, _ ) =
+        ( barrierDecisions, newSeed ) =
             Random.step listGen seed
     in
-        List.foldl placeTileBarriers board (zipList coords barrierDecisions)
+        ( newSeed
+        , List.foldl placeTileBarriers
+            board
+            (zipList coords
+                barrierDecisions
+            )
+        )
+
+
+{-| Randomly rotate tiles in a generated board.
+-}
+shuffleBoard : ( Random.Seed, Board ) -> Board
+shuffleBoard ( seed, board ) =
+    let
+        tiles =
+            Dict.toList board.tiles
+
+        gen =
+            Random.list (List.length tiles) (Random.int 0 3)
+
+        ( rotates, _ ) =
+            Random.step gen seed
+
+        newTiles =
+            List.map2
+                (\( p, t ) r ->
+                    ( p
+                    , { t
+                        | connections =
+                            rotateList r
+                                t.connections
+                      }
+                    )
+                )
+                tiles
+                rotates
+    in
+        { board | tiles = (Dict.fromList newTiles) }
 
 
 {-| Generate a new board layout of a given size.
@@ -576,8 +616,10 @@ generateBoard size seed =
         centerPos =
             ( mid, mid )
     in
-        generateBoardHelper [ centerPos ] seed board
-            |> placeBarriers seed
+        generateBoardHelper [ centerPos ] ( seed, board )
+            |> placeBarriers
+            |> shuffleBoard
+            |> updateConnections
 
 
 
