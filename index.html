@@ -9286,6 +9286,174 @@ var _elm_lang$html$Html_Events$Options = F2(
 	function (a, b) {
 		return {stopPropagation: a, preventDefault: b};
 	});
+var _elm_lang$keyboard$Keyboard$onSelfMsg = F3(
+	function (router, _p0, state) {
+		var _p1 = _p0;
+		var _p2 = A2(_elm_lang$core$Dict$get, _p1.category, state);
+		if (_p2.ctor === 'Nothing') {
+			return _elm_lang$core$Task$succeed(state);
+		} else {
+			var send = function (tagger) {
+				return A2(
+					_elm_lang$core$Platform$sendToApp,
+					router,
+					tagger(_p1.keyCode));
+			};
+			return A2(
+				_elm_lang$core$Task$andThen,
+				function (_p3) {
+					return _elm_lang$core$Task$succeed(state);
+				},
+				_elm_lang$core$Task$sequence(
+					A2(_elm_lang$core$List$map, send, _p2._0.taggers)));
+		}
+	});
+var _elm_lang$keyboard$Keyboard_ops = _elm_lang$keyboard$Keyboard_ops || {};
+_elm_lang$keyboard$Keyboard_ops['&>'] = F2(
+	function (task1, task2) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			function (_p4) {
+				return task2;
+			},
+			task1);
+	});
+var _elm_lang$keyboard$Keyboard$init = _elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty);
+var _elm_lang$keyboard$Keyboard$categorizeHelpHelp = F2(
+	function (value, maybeValues) {
+		var _p5 = maybeValues;
+		if (_p5.ctor === 'Nothing') {
+			return _elm_lang$core$Maybe$Just(
+				{
+					ctor: '::',
+					_0: value,
+					_1: {ctor: '[]'}
+				});
+		} else {
+			return _elm_lang$core$Maybe$Just(
+				{ctor: '::', _0: value, _1: _p5._0});
+		}
+	});
+var _elm_lang$keyboard$Keyboard$categorizeHelp = F2(
+	function (subs, subDict) {
+		categorizeHelp:
+		while (true) {
+			var _p6 = subs;
+			if (_p6.ctor === '[]') {
+				return subDict;
+			} else {
+				var _v4 = _p6._1,
+					_v5 = A3(
+					_elm_lang$core$Dict$update,
+					_p6._0._0,
+					_elm_lang$keyboard$Keyboard$categorizeHelpHelp(_p6._0._1),
+					subDict);
+				subs = _v4;
+				subDict = _v5;
+				continue categorizeHelp;
+			}
+		}
+	});
+var _elm_lang$keyboard$Keyboard$categorize = function (subs) {
+	return A2(_elm_lang$keyboard$Keyboard$categorizeHelp, subs, _elm_lang$core$Dict$empty);
+};
+var _elm_lang$keyboard$Keyboard$keyCode = A2(_elm_lang$core$Json_Decode$field, 'keyCode', _elm_lang$core$Json_Decode$int);
+var _elm_lang$keyboard$Keyboard$subscription = _elm_lang$core$Native_Platform.leaf('Keyboard');
+var _elm_lang$keyboard$Keyboard$Watcher = F2(
+	function (a, b) {
+		return {taggers: a, pid: b};
+	});
+var _elm_lang$keyboard$Keyboard$Msg = F2(
+	function (a, b) {
+		return {category: a, keyCode: b};
+	});
+var _elm_lang$keyboard$Keyboard$onEffects = F3(
+	function (router, newSubs, oldState) {
+		var rightStep = F3(
+			function (category, taggers, task) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					function (state) {
+						return A2(
+							_elm_lang$core$Task$andThen,
+							function (pid) {
+								return _elm_lang$core$Task$succeed(
+									A3(
+										_elm_lang$core$Dict$insert,
+										category,
+										A2(_elm_lang$keyboard$Keyboard$Watcher, taggers, pid),
+										state));
+							},
+							_elm_lang$core$Process$spawn(
+								A3(
+									_elm_lang$dom$Dom_LowLevel$onDocument,
+									category,
+									_elm_lang$keyboard$Keyboard$keyCode,
+									function (_p7) {
+										return A2(
+											_elm_lang$core$Platform$sendToSelf,
+											router,
+											A2(_elm_lang$keyboard$Keyboard$Msg, category, _p7));
+									})));
+					},
+					task);
+			});
+		var bothStep = F4(
+			function (category, _p8, taggers, task) {
+				var _p9 = _p8;
+				return A2(
+					_elm_lang$core$Task$map,
+					A2(
+						_elm_lang$core$Dict$insert,
+						category,
+						A2(_elm_lang$keyboard$Keyboard$Watcher, taggers, _p9.pid)),
+					task);
+			});
+		var leftStep = F3(
+			function (category, _p10, task) {
+				var _p11 = _p10;
+				return A2(
+					_elm_lang$keyboard$Keyboard_ops['&>'],
+					_elm_lang$core$Process$kill(_p11.pid),
+					task);
+			});
+		return A6(
+			_elm_lang$core$Dict$merge,
+			leftStep,
+			bothStep,
+			rightStep,
+			oldState,
+			_elm_lang$keyboard$Keyboard$categorize(newSubs),
+			_elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty));
+	});
+var _elm_lang$keyboard$Keyboard$MySub = F2(
+	function (a, b) {
+		return {ctor: 'MySub', _0: a, _1: b};
+	});
+var _elm_lang$keyboard$Keyboard$presses = function (tagger) {
+	return _elm_lang$keyboard$Keyboard$subscription(
+		A2(_elm_lang$keyboard$Keyboard$MySub, 'keypress', tagger));
+};
+var _elm_lang$keyboard$Keyboard$downs = function (tagger) {
+	return _elm_lang$keyboard$Keyboard$subscription(
+		A2(_elm_lang$keyboard$Keyboard$MySub, 'keydown', tagger));
+};
+var _elm_lang$keyboard$Keyboard$ups = function (tagger) {
+	return _elm_lang$keyboard$Keyboard$subscription(
+		A2(_elm_lang$keyboard$Keyboard$MySub, 'keyup', tagger));
+};
+var _elm_lang$keyboard$Keyboard$subMap = F2(
+	function (func, _p12) {
+		var _p13 = _p12;
+		return A2(
+			_elm_lang$keyboard$Keyboard$MySub,
+			_p13._0,
+			function (_p14) {
+				return func(
+					_p13._1(_p14));
+			});
+	});
+_elm_lang$core$Native_Platform.effectManagers['Keyboard'] = {pkg: 'elm-lang/keyboard', init: _elm_lang$keyboard$Keyboard$init, onEffects: _elm_lang$keyboard$Keyboard$onEffects, onSelfMsg: _elm_lang$keyboard$Keyboard$onSelfMsg, tag: 'sub', subMap: _elm_lang$keyboard$Keyboard$subMap};
 var _elm_lang$mouse$Mouse_ops = _elm_lang$mouse$Mouse_ops || {};
 _elm_lang$mouse$Mouse_ops['&>'] = F2(
 	function (t1, t2) {
@@ -12082,6 +12250,13 @@ var _user$project$Board$renderBackground = function (tile) {
 		}
 	};
 };
+var _user$project$Board$renderLock = A2(
+	_evancz$elm_graphics$Collage$alpha,
+	0.5,
+	A2(
+		_evancz$elm_graphics$Collage$filled,
+		_elm_lang$core$Color$purple,
+		_evancz$elm_graphics$Collage$square(_user$project$Board$tileSize)));
 var _user$project$Board$barrierRenderFunctions = function () {
 	var line = A2(
 		_evancz$elm_graphics$Collage$filled,
@@ -12153,7 +12328,21 @@ var _user$project$Board$renderTile = function (_p9) {
 		{ctor: '_Tuple2', _0: _p11, _1: _p12});
 	var connections = _user$project$Board$renderConnections(_p12);
 	var background = _user$project$Board$renderBackground(_p12);
-	var group = _evancz$elm_graphics$Collage$group(
+	var group = _p12.locked ? _evancz$elm_graphics$Collage$group(
+		A2(
+			_elm_lang$core$Basics_ops['++'],
+			background,
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				connections,
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					foreground,
+					{
+						ctor: '::',
+						_0: _user$project$Board$renderLock,
+						_1: {ctor: '[]'}
+					})))) : _evancz$elm_graphics$Collage$group(
 		A2(
 			_elm_lang$core$Basics_ops['++'],
 			background,
@@ -12166,11 +12355,45 @@ var _user$project$Board$renderBoard = function (board) {
 	var barrierRenders = A2(_elm_lang$core$List$map, _user$project$Board$renderBarriers, tiles);
 	return A2(_elm_lang$core$Basics_ops['++'], tileRenders, barrierRenders);
 };
+var _user$project$Board$shuffleBoard = function (_p13) {
+	var _p14 = _p13;
+	var _p19 = _p14._1;
+	var tiles = _elm_lang$core$Dict$toList(_p19.tiles);
+	var gen = A2(
+		_elm_lang$core$Random$list,
+		_elm_lang$core$List$length(tiles),
+		A2(_elm_lang$core$Random$int, 0, 3));
+	var _p15 = A2(_elm_lang$core$Random$step, gen, _p14._0);
+	var rotates = _p15._0;
+	var newTiles = A3(
+		_elm_lang$core$List$map2,
+		F2(
+			function (_p16, r) {
+				var _p17 = _p16;
+				var _p18 = _p17._1;
+				return {
+					ctor: '_Tuple2',
+					_0: _p17._0,
+					_1: _elm_lang$core$Native_Utils.update(
+						_p18,
+						{
+							connections: A2(_user$project$Util$rotateList, r, _p18.connections)
+						})
+				};
+			}),
+		tiles,
+		rotates);
+	return _elm_lang$core$Native_Utils.update(
+		_p19,
+		{
+			tiles: _elm_lang$core$Dict$fromList(newTiles)
+		});
+};
 var _user$project$Board$placeBarrier = F4(
 	function (tile, dir, value, board) {
 		var merge = function () {
-			var _p13 = dir;
-			switch (_p13.ctor) {
+			var _p20 = dir;
+			switch (_p20.ctor) {
 				case 'Up':
 					return {
 						ctor: '::',
@@ -12254,7 +12477,7 @@ var _user$project$Board$placeBarrier = F4(
 			tile.barriers,
 			merge,
 			tile.connections);
-		var updateTile = function (_p14) {
+		var updateTile = function (_p21) {
 			return _elm_lang$core$Maybe$Just(
 				_elm_lang$core$Native_Utils.update(
 					tile,
@@ -12277,7 +12500,7 @@ var _user$project$Board$resetConnections = function (board) {
 			tiles: A2(
 				_elm_lang$core$Dict$map,
 				F2(
-					function (_p15, t) {
+					function (_p22, t) {
 						return _elm_lang$core$Native_Utils.update(
 							t,
 							{connected: false});
@@ -12287,12 +12510,12 @@ var _user$project$Board$resetConnections = function (board) {
 };
 var _user$project$Board$updateVisited = F2(
 	function (tile, visited) {
-		var _p16 = tile;
-		if (_p16.ctor === 'Just') {
-			var _p17 = _p16._0;
+		var _p23 = tile;
+		if (_p23.ctor === 'Just') {
+			var _p24 = _p23._0;
 			return A2(
 				_elm_lang$core$Set$insert,
-				{ctor: '_Tuple2', _0: _p17.x, _1: _p17.y},
+				{ctor: '_Tuple2', _0: _p24.x, _1: _p24.y},
 				visited);
 		} else {
 			return visited;
@@ -12300,23 +12523,23 @@ var _user$project$Board$updateVisited = F2(
 	});
 var _user$project$Board$visitedFilter = F2(
 	function (visited, tile) {
-		var _p18 = tile;
-		if (_p18.ctor === 'Just') {
-			var _p19 = _p18._0;
+		var _p25 = tile;
+		if (_p25.ctor === 'Just') {
+			var _p26 = _p25._0;
 			return !A2(
 				_elm_lang$core$Set$member,
-				{ctor: '_Tuple2', _0: _p19.x, _1: _p19.y},
+				{ctor: '_Tuple2', _0: _p26.x, _1: _p26.y},
 				visited);
 		} else {
 			return false;
 		}
 	});
 var _user$project$Board$markTileConnected = function (tile) {
-	var _p20 = tile;
-	if (_p20.ctor === 'Just') {
+	var _p27 = tile;
+	if (_p27.ctor === 'Just') {
 		return _elm_lang$core$Maybe$Just(
 			_elm_lang$core$Native_Utils.update(
-				_p20._0,
+				_p27._0,
 				{connected: true}));
 	} else {
 		return _elm_lang$core$Maybe$Nothing;
@@ -12324,15 +12547,15 @@ var _user$project$Board$markTileConnected = function (tile) {
 };
 var _user$project$Board$markConnected = F2(
 	function (tile, board) {
-		var _p21 = tile;
-		if (_p21.ctor === 'Just') {
-			var _p22 = _p21._0;
+		var _p28 = tile;
+		if (_p28.ctor === 'Just') {
+			var _p29 = _p28._0;
 			return _elm_lang$core$Native_Utils.update(
 				board,
 				{
 					tiles: A3(
 						_elm_lang$core$Dict$update,
-						{ctor: '_Tuple2', _0: _p22.x, _1: _p22.y},
+						{ctor: '_Tuple2', _0: _p29.x, _1: _p29.y},
 						_user$project$Board$markTileConnected,
 						board.tiles)
 				});
@@ -12350,36 +12573,79 @@ var _user$project$Board$tileConnections = function (tile) {
 		tile.barriers,
 		tile.connections);
 };
+var _user$project$Board$rotateWithLock = F2(
+	function (dir, tile) {
+		var rot = function () {
+			var _p30 = dir;
+			if (_p30.ctor === 'RotateCW') {
+				return 1;
+			} else {
+				return -1;
+			}
+		}();
+		var _p31 = tile;
+		if (_p31.ctor === 'Just') {
+			var _p32 = _p31._0;
+			return (!_p32.locked) ? _elm_lang$core$Maybe$Just(
+				_elm_lang$core$Native_Utils.update(
+					_p32,
+					{
+						connections: A2(_user$project$Util$rotateList, rot, _p32.connections)
+					})) : _elm_lang$core$Maybe$Just(_p32);
+		} else {
+			return tile;
+		}
+	});
+var _user$project$Board$lockTile = F2(
+	function (pos, board) {
+		var lockFn = function (tile) {
+			var _p33 = tile;
+			if (_p33.ctor === 'Just') {
+				var _p34 = _p33._0;
+				return _elm_lang$core$Maybe$Just(
+					_elm_lang$core$Native_Utils.update(
+						_p34,
+						{locked: !_p34.locked}));
+			} else {
+				return _elm_lang$core$Maybe$Nothing;
+			}
+		};
+		return _elm_lang$core$Native_Utils.update(
+			board,
+			{
+				tiles: A3(_elm_lang$core$Dict$update, pos, lockFn, board.tiles)
+			});
+	});
 var _user$project$Board$getTile = F2(
 	function (board, pos) {
 		return A2(_elm_lang$core$Dict$get, pos, board.tiles);
 	});
 var _user$project$Board$tileNeighbours = F2(
 	function (tile, board) {
-		var wrap = function (_p23) {
-			var _p24 = _p23;
+		var wrap = function (_p35) {
+			var _p36 = _p35;
 			return {
 				ctor: '_Tuple2',
-				_0: A2(_elm_lang$core$Basics_ops['%'], _p24._0, board.size),
-				_1: A2(_elm_lang$core$Basics_ops['%'], _p24._1, board.size)
+				_0: A2(_elm_lang$core$Basics_ops['%'], _p36._0, board.size),
+				_1: A2(_elm_lang$core$Basics_ops['%'], _p36._1, board.size)
 			};
 		};
 		var coords = function () {
-			var _p25 = tile;
-			if (_p25.ctor === 'Just') {
-				var _p26 = _p25._0;
+			var _p37 = tile;
+			if (_p37.ctor === 'Just') {
+				var _p38 = _p37._0;
 				return {
 					ctor: '::',
-					_0: {ctor: '_Tuple2', _0: _p26.x, _1: _p26.y - 1},
+					_0: {ctor: '_Tuple2', _0: _p38.x, _1: _p38.y - 1},
 					_1: {
 						ctor: '::',
-						_0: {ctor: '_Tuple2', _0: _p26.x + 1, _1: _p26.y},
+						_0: {ctor: '_Tuple2', _0: _p38.x + 1, _1: _p38.y},
 						_1: {
 							ctor: '::',
-							_0: {ctor: '_Tuple2', _0: _p26.x, _1: _p26.y + 1},
+							_0: {ctor: '_Tuple2', _0: _p38.x, _1: _p38.y + 1},
 							_1: {
 								ctor: '::',
-								_0: {ctor: '_Tuple2', _0: _p26.x - 1, _1: _p26.y},
+								_0: {ctor: '_Tuple2', _0: _p38.x - 1, _1: _p38.y},
 								_1: {ctor: '[]'}
 							}
 						}
@@ -12400,22 +12666,22 @@ var _user$project$Board$sourceTile = function (board) {
 };
 var _user$project$Board$remainingConnections = F2(
 	function (board, pos) {
-		var _p27 = A2(_user$project$Board$getTile, board, pos);
-		if (_p27.ctor === 'Just') {
+		var _p39 = A2(_user$project$Board$getTile, board, pos);
+		if (_p39.ctor === 'Just') {
 			return _elm_lang$core$List$sum(
 				A2(
 					_elm_lang$core$List$map,
 					function (c) {
 						return c ? 0 : 1;
 					},
-					_p27._0.connections));
+					_p39._0.connections));
 		} else {
 			return 0;
 		}
 	});
-var _user$project$Board$Tile = F6(
-	function (a, b, c, d, e, f) {
-		return {x: a, y: b, tileType: c, connected: d, connections: e, barriers: f};
+var _user$project$Board$Tile = F7(
+	function (a, b, c, d, e, f, g) {
+		return {x: a, y: b, tileType: c, connected: d, connections: e, barriers: f, locked: g};
 	});
 var _user$project$Board$Board = F2(
 	function (a, b) {
@@ -12427,8 +12693,8 @@ var _user$project$Board$Right = {ctor: 'Right'};
 var _user$project$Board$Up = {ctor: 'Up'};
 var _user$project$Board$tileHasConnection = F2(
 	function (tile, dir) {
-		var _p28 = tile;
-		if (_p28.ctor === 'Just') {
+		var _p40 = tile;
+		if (_p40.ctor === 'Just') {
 			return function (l) {
 				return _elm_lang$core$Native_Utils.cmp(
 					_elm_lang$core$List$length(l),
@@ -12436,9 +12702,9 @@ var _user$project$Board$tileHasConnection = F2(
 			}(
 				A2(
 					_elm_lang$core$List$filter,
-					function (_p29) {
-						var _p30 = _p29;
-						return _p30._1 && _elm_lang$core$Native_Utils.eq(_p30._0, dir);
+					function (_p41) {
+						var _p42 = _p41;
+						return _p42._1 && _elm_lang$core$Native_Utils.eq(_p42._0, dir);
 					},
 					A2(
 						_user$project$Util$zipList,
@@ -12459,14 +12725,14 @@ var _user$project$Board$tileHasConnection = F2(
 								}
 							}
 						},
-						_user$project$Board$tileConnections(_p28._0))));
+						_user$project$Board$tileConnections(_p40._0))));
 		} else {
 			return false;
 		}
 	});
 var _user$project$Board$oppositeDir = function (dir) {
-	var _p31 = dir;
-	switch (_p31.ctor) {
+	var _p43 = dir;
+	switch (_p43.ctor) {
 		case 'Up':
 			return _user$project$Board$Down;
 		case 'Down':
@@ -12488,15 +12754,15 @@ var _user$project$Board$tileConnectedNeighbours = F2(
 	function (tile, board) {
 		return A2(
 			_elm_lang$core$List$map,
-			function (_p32) {
-				var _p33 = _p32;
-				return _p33._1;
+			function (_p44) {
+				var _p45 = _p44;
+				return _p45._1;
 			},
 			A2(
 				_elm_lang$core$List$filter,
-				function (_p34) {
-					var _p35 = _p34;
-					return A3(_user$project$Board$tilesConnected, tile, _p35._0, _p35._1);
+				function (_p46) {
+					var _p47 = _p46;
+					return A3(_user$project$Board$tilesConnected, tile, _p47._0, _p47._1);
 				},
 				A2(
 					_user$project$Util$zipList,
@@ -12523,21 +12789,21 @@ var _user$project$Board$updateConnectionsHelper = F3(
 	function (queue, visited, board) {
 		updateConnectionsHelper:
 		while (true) {
-			var _p36 = queue;
-			if (_p36.ctor === '::') {
-				var _p37 = _p36._0;
-				var newVisited = A2(_user$project$Board$updateVisited, _p37, visited);
+			var _p48 = queue;
+			if (_p48.ctor === '::') {
+				var _p49 = _p48._0;
+				var newVisited = A2(_user$project$Board$updateVisited, _p49, visited);
 				var filterFn = _user$project$Board$visitedFilter(visited);
 				var neighbours = A2(
 					_elm_lang$core$List$filter,
 					filterFn,
-					A2(_user$project$Board$tileConnectedNeighbours, _p37, board));
-				var _v20 = A2(_elm_lang$core$Basics_ops['++'], neighbours, _p36._1),
-					_v21 = newVisited,
-					_v22 = A2(_user$project$Board$markConnected, _p37, board);
-				queue = _v20;
-				visited = _v21;
-				board = _v22;
+					A2(_user$project$Board$tileConnectedNeighbours, _p49, board));
+				var _v25 = A2(_elm_lang$core$Basics_ops['++'], neighbours, _p48._1),
+					_v26 = newVisited,
+					_v27 = A2(_user$project$Board$markConnected, _p49, board);
+				queue = _v25;
+				visited = _v26;
+				board = _v27;
 				continue updateConnectionsHelper;
 			} else {
 				return board;
@@ -12557,44 +12823,24 @@ var _user$project$Board$updateConnections = function (board) {
 };
 var _user$project$Board$rotateTile = F3(
 	function (pos, dir, board) {
-		var rotateFn = function (tile) {
-			var _p38 = {ctor: '_Tuple2', _0: tile, _1: dir};
-			if (_p38._0.ctor === 'Just') {
-				if (_p38._1.ctor === 'RotateCW') {
-					var _p39 = _p38._0._0;
-					return _elm_lang$core$Maybe$Just(
-						_elm_lang$core$Native_Utils.update(
-							_p39,
-							{
-								connections: A2(_user$project$Util$rotateList, 1, _p39.connections)
-							}));
-				} else {
-					var _p40 = _p38._0._0;
-					return _elm_lang$core$Maybe$Just(
-						_elm_lang$core$Native_Utils.update(
-							_p40,
-							{
-								connections: A2(_user$project$Util$rotateList, -1, _p40.connections)
-							}));
-				}
-			} else {
-				return _elm_lang$core$Maybe$Nothing;
-			}
-		};
 		return _user$project$Board$updateConnections(
 			_elm_lang$core$Native_Utils.update(
 				board,
 				{
-					tiles: A3(_elm_lang$core$Dict$update, pos, rotateFn, board.tiles)
+					tiles: A3(
+						_elm_lang$core$Dict$update,
+						pos,
+						_user$project$Board$rotateWithLock(dir),
+						board.tiles)
 				}));
 	});
 var _user$project$Board$connectTile = F3(
 	function (tile, dir, board) {
 		var newConnections = A2(
 			_elm_lang$core$List$map,
-			function (_p41) {
-				var _p42 = _p41;
-				return _elm_lang$core$Native_Utils.eq(_p42._0, dir) ? true : _p42._1;
+			function (_p50) {
+				var _p51 = _p50;
+				return _elm_lang$core$Native_Utils.eq(_p51._0, dir) ? true : _p51._1;
 			},
 			A2(
 				_user$project$Util$zipList,
@@ -12617,11 +12863,11 @@ var _user$project$Board$connectTile = F3(
 				},
 				tile.connections));
 		var updateFn = function (dt) {
-			var _p43 = dt;
-			if (_p43.ctor === 'Just') {
+			var _p52 = dt;
+			if (_p52.ctor === 'Just') {
 				return _elm_lang$core$Maybe$Just(
 					_elm_lang$core$Native_Utils.update(
-						_p43._0,
+						_p52._0,
 						{connections: newConnections}));
 			} else {
 				return _elm_lang$core$Maybe$Nothing;
@@ -12647,80 +12893,86 @@ var _user$project$Board$connectTiles = F4(
 			A3(_user$project$Board$connectTile, src, dir, board));
 	});
 var _user$project$Board$placeTileBarriers = F2(
-	function (_p44, board) {
-		var _p45 = _p44;
-		var _p49 = _p45._1._0;
-		var _p48 = _p45._1._1;
-		var tile = A2(_user$project$Board$getTile, board, _p45._0);
+	function (_p53, board) {
+		var _p54 = _p53;
+		var _p58 = _p54._1._0;
+		var _p57 = _p54._1._1;
+		var tile = A2(_user$project$Board$getTile, board, _p54._0);
 		var neighbours = A2(_user$project$Board$tileNeighbours, tile, board);
-		var _p46 = {ctor: '_Tuple2', _0: tile, _1: neighbours};
-		if (((((((((_p46.ctor === '_Tuple2') && (_p46._0.ctor === 'Just')) && (_p46._1.ctor === '::')) && (_p46._1._0.ctor === 'Just')) && (_p46._1._1.ctor === '::')) && (_p46._1._1._0.ctor === 'Just')) && (_p46._1._1._1.ctor === '::')) && (_p46._1._1._1._1.ctor === '::')) && (_p46._1._1._1._1._1.ctor === '[]')) {
-			var _p47 = _p46._0._0;
+		var _p55 = {ctor: '_Tuple2', _0: tile, _1: neighbours};
+		if (((((((((_p55.ctor === '_Tuple2') && (_p55._0.ctor === 'Just')) && (_p55._1.ctor === '::')) && (_p55._1._0.ctor === 'Just')) && (_p55._1._1.ctor === '::')) && (_p55._1._1._0.ctor === 'Just')) && (_p55._1._1._1.ctor === '::')) && (_p55._1._1._1._1.ctor === '::')) && (_p55._1._1._1._1._1.ctor === '[]')) {
+			var _p56 = _p55._0._0;
 			return A4(
 				_user$project$Board$placeBarrier,
-				_p46._1._1._0._0,
+				_p55._1._1._0._0,
 				_user$project$Board$Left,
-				_p48,
+				_p57,
 				A4(
 					_user$project$Board$placeBarrier,
-					_p46._1._0._0,
+					_p55._1._0._0,
 					_user$project$Board$Down,
-					_p49,
+					_p58,
 					A4(
 						_user$project$Board$placeBarrier,
-						_p47,
+						_p56,
 						_user$project$Board$Right,
-						_p48,
-						A4(_user$project$Board$placeBarrier, _p47, _user$project$Board$Up, _p49, board))));
+						_p57,
+						A4(_user$project$Board$placeBarrier, _p56, _user$project$Board$Up, _p58, board))));
 		} else {
 			return board;
 		}
 	});
-var _user$project$Board$placeBarriers = F2(
-	function (seed, board) {
-		var barrierChance = 0.2;
-		var gen = A2(
-			_elm_lang$core$Random$map,
-			F2(
-				function (x, y) {
-					return _elm_lang$core$Native_Utils.cmp(x, y) > 0;
-				})(barrierChance),
-			A2(_elm_lang$core$Random$float, 0, 1));
-		var comboGen = A3(
-			_elm_lang$core$Random$map2,
-			F2(
-				function (v0, v1) {
-					return {ctor: '_Tuple2', _0: v0, _1: v1};
-				}),
-			gen,
-			gen);
-		var range = A2(_elm_lang$core$List$range, 0, board.size - 1);
-		var coords = A2(_user$project$Util$listProduct, range, range);
-		var listGen = A2(
-			_elm_lang$core$Random$list,
-			_elm_lang$core$List$length(coords),
-			comboGen);
-		var _p50 = A2(_elm_lang$core$Random$step, listGen, seed);
-		var barrierDecisions = _p50._0;
-		return A3(
+var _user$project$Board$placeBarriers = function (_p59) {
+	var _p60 = _p59;
+	var _p62 = _p60._1;
+	var barrierChance = 0.2;
+	var gen = A2(
+		_elm_lang$core$Random$map,
+		F2(
+			function (x, y) {
+				return _elm_lang$core$Native_Utils.cmp(x, y) > 0;
+			})(barrierChance),
+		A2(_elm_lang$core$Random$float, 0, 1));
+	var comboGen = A3(
+		_elm_lang$core$Random$map2,
+		F2(
+			function (v0, v1) {
+				return {ctor: '_Tuple2', _0: v0, _1: v1};
+			}),
+		gen,
+		gen);
+	var range = A2(_elm_lang$core$List$range, 0, _p62.size - 1);
+	var coords = A2(_user$project$Util$listProduct, range, range);
+	var listGen = A2(
+		_elm_lang$core$Random$list,
+		_elm_lang$core$List$length(coords),
+		comboGen);
+	var _p61 = A2(_elm_lang$core$Random$step, listGen, _p60._0);
+	var barrierDecisions = _p61._0;
+	var newSeed = _p61._1;
+	return {
+		ctor: '_Tuple2',
+		_0: newSeed,
+		_1: A3(
 			_elm_lang$core$List$foldl,
 			_user$project$Board$placeTileBarriers,
-			board,
-			A2(_user$project$Util$zipList, coords, barrierDecisions));
-	});
+			_p62,
+			A2(_user$project$Util$zipList, coords, barrierDecisions))
+	};
+};
 var _user$project$Board$RotateCCW = {ctor: 'RotateCCW'};
 var _user$project$Board$RotateCW = {ctor: 'RotateCW'};
 var _user$project$Board$Normal = {ctor: 'Normal'};
 var _user$project$Board$Source = {ctor: 'Source'};
 var _user$project$Board$emptyTile = F2(
-	function (size, _p51) {
-		var _p52 = _p51;
-		var _p54 = _p52._1;
-		var _p53 = _p52._0;
+	function (size, _p63) {
+		var _p64 = _p63;
+		var _p66 = _p64._1;
+		var _p65 = _p64._0;
 		var falses = A2(_elm_lang$core$List$repeat, 4, false);
 		var mid = (size / 2) | 0;
-		var tileType = (_elm_lang$core$Native_Utils.eq(_p53, mid) && _elm_lang$core$Native_Utils.eq(_p54, mid)) ? _user$project$Board$Source : _user$project$Board$Normal;
-		return A6(_user$project$Board$Tile, _p53, _p54, tileType, false, falses, falses);
+		var tileType = (_elm_lang$core$Native_Utils.eq(_p65, mid) && _elm_lang$core$Native_Utils.eq(_p66, mid)) ? _user$project$Board$Source : _user$project$Board$Normal;
+		return A7(_user$project$Board$Tile, _p65, _p66, tileType, false, falses, falses, false);
 	});
 var _user$project$Board$emptyBoardTiles = function (size) {
 	var coords = A2(_elm_lang$core$List$range, 0, size - 1);
@@ -12746,14 +12998,14 @@ var _user$project$Board$availablePaths = F2(
 	function (board, pos) {
 		return A2(
 			_elm_lang$core$List$filter,
-			function (_p55) {
-				var _p56 = _p55;
-				var _p57 = _p56._1;
+			function (_p67) {
+				var _p68 = _p67;
+				var _p69 = _p68._1;
 				return _elm_lang$core$Native_Utils.eq(
 					A2(
 						_user$project$Board$remainingConnections,
 						board,
-						{ctor: '_Tuple2', _0: _p57.x, _1: _p57.y}),
+						{ctor: '_Tuple2', _0: _p69.x, _1: _p69.y}),
 					4);
 			},
 			A2(
@@ -12778,9 +13030,9 @@ var _user$project$Board$availablePaths = F2(
 				A2(
 					_elm_lang$core$List$map,
 					function (tile) {
-						var _p58 = tile;
-						if (_p58.ctor === 'Just') {
-							return _p58._0;
+						var _p70 = tile;
+						if (_p70.ctor === 'Just') {
+							return _p70._0;
 						} else {
 							return A2(
 								_user$project$Board$emptyTile,
@@ -12793,61 +13045,71 @@ var _user$project$Board$availablePaths = F2(
 						A2(_user$project$Board$getTile, board, pos),
 						board))));
 	});
-var _user$project$Board$generateBoardHelper = F3(
-	function (queue, seed, board) {
+var _user$project$Board$generateBoardHelper = F2(
+	function (queue, _p71) {
 		generateBoardHelper:
 		while (true) {
-			var _p59 = queue;
-			if (_p59.ctor === '::') {
-				var _p61 = _p59._1;
-				var _p60 = _p59._0;
+			var _p72 = _p71;
+			var _p77 = _p72._0;
+			var _p76 = _p72._1;
+			var _p73 = queue;
+			if (_p73.ctor === '::') {
+				var _p75 = _p73._1;
+				var _p74 = _p73._0;
 				var pathCount = _elm_lang$core$List$length(
-					A2(_user$project$Board$availablePaths, board, _p60));
+					A2(_user$project$Board$availablePaths, _p76, _p74));
 				if ((_elm_lang$core$Native_Utils.cmp(
-					A2(_user$project$Board$remainingConnections, board, _p60),
+					A2(_user$project$Board$remainingConnections, _p76, _p74),
 					1) < 1) || _elm_lang$core$Native_Utils.eq(pathCount, 0)) {
-					var _v32 = _p61,
-						_v33 = seed,
-						_v34 = board;
-					queue = _v32;
-					seed = _v33;
-					board = _v34;
+					var _v38 = _p75,
+						_v39 = {ctor: '_Tuple2', _0: _p77, _1: _p76};
+					queue = _v38;
+					_p71 = _v39;
 					continue generateBoardHelper;
 				} else {
-					return A4(_user$project$Board$makeNewConnection, _p60, _p61, seed, board);
+					return A3(
+						_user$project$Board$makeNewConnection,
+						_p74,
+						_p75,
+						{ctor: '_Tuple2', _0: _p77, _1: _p76});
 				}
 			} else {
-				return _user$project$Board$updateConnections(board);
+				return {ctor: '_Tuple2', _0: _p77, _1: _p76};
 			}
 		}
 	});
-var _user$project$Board$makeNewConnection = F4(
-	function (pos, queue, seed, board) {
-		var tile = A2(_user$project$Board$getTile, board, pos);
-		var paths = A2(_user$project$Board$availablePaths, board, pos);
+var _user$project$Board$makeNewConnection = F3(
+	function (pos, queue, _p78) {
+		var _p79 = _p78;
+		var _p83 = _p79._1;
+		var tile = A2(_user$project$Board$getTile, _p83, pos);
+		var paths = A2(_user$project$Board$availablePaths, _p83, pos);
 		var pathCount = _elm_lang$core$List$length(paths);
-		var _p62 = A2(
+		var _p80 = A2(
 			_elm_lang$core$Random$step,
 			A2(_elm_lang$core$Random$int, 1, pathCount),
-			seed);
-		var selected = _p62._0;
-		var newSeed = _p62._1;
+			_p79._0);
+		var selected = _p80._0;
+		var newSeed = _p80._1;
 		var path = _elm_lang$core$List$head(
 			A2(_elm_lang$core$List$drop, selected - 1, paths));
-		var _p63 = {ctor: '_Tuple2', _0: tile, _1: path};
-		if ((((_p63.ctor === '_Tuple2') && (_p63._0.ctor === 'Just')) && (_p63._1.ctor === 'Just')) && (_p63._1._0.ctor === '_Tuple2')) {
-			var _p64 = _p63._1._0._1;
-			return A3(
+		var _p81 = {ctor: '_Tuple2', _0: tile, _1: path};
+		if ((((_p81.ctor === '_Tuple2') && (_p81._0.ctor === 'Just')) && (_p81._1.ctor === 'Just')) && (_p81._1._0.ctor === '_Tuple2')) {
+			var _p82 = _p81._1._0._1;
+			var newBoard = A4(_user$project$Board$connectTiles, _p81._0._0, _p81._1._0._0, _p82, _p83);
+			return A2(
 				_user$project$Board$generateBoardHelper,
 				{
 					ctor: '::',
-					_0: {ctor: '_Tuple2', _0: _p64.x, _1: _p64.y},
+					_0: {ctor: '_Tuple2', _0: _p82.x, _1: _p82.y},
 					_1: {ctor: '::', _0: pos, _1: queue}
 				},
-				newSeed,
-				A4(_user$project$Board$connectTiles, _p63._0._0, _p63._1._0._0, _p64, board));
+				{ctor: '_Tuple2', _0: newSeed, _1: newBoard});
 		} else {
-			return A3(_user$project$Board$generateBoardHelper, queue, newSeed, board);
+			return A2(
+				_user$project$Board$generateBoardHelper,
+				queue,
+				{ctor: '_Tuple2', _0: newSeed, _1: _p83});
 		}
 	});
 var _user$project$Board$generateBoard = F2(
@@ -12855,18 +13117,17 @@ var _user$project$Board$generateBoard = F2(
 		var mid = (size / 2) | 0;
 		var centerPos = {ctor: '_Tuple2', _0: mid, _1: mid};
 		var board = _user$project$Board$emptyBoard(size);
-		return A2(
-			_user$project$Board$placeBarriers,
-			seed,
-			A3(
-				_user$project$Board$generateBoardHelper,
-				{
-					ctor: '::',
-					_0: centerPos,
-					_1: {ctor: '[]'}
-				},
-				seed,
-				board));
+		return _user$project$Board$updateConnections(
+			_user$project$Board$shuffleBoard(
+				_user$project$Board$placeBarriers(
+					A2(
+						_user$project$Board$generateBoardHelper,
+						{
+							ctor: '::',
+							_0: centerPos,
+							_1: {ctor: '[]'}
+						},
+						{ctor: '_Tuple2', _0: seed, _1: board}))));
 	});
 var _user$project$Main$collageHeight = 600;
 var _user$project$Main$collageWidth = 600;
@@ -12880,62 +13141,91 @@ var _user$project$Main$clickInfo = function (mousePos) {
 		return {ctor: '_Tuple2', _0: tilePos, _1: _user$project$Board$RotateCCW};
 	}
 };
-var _user$project$Main$updateRotation = F2(
-	function (mousePos, board) {
-		var _p1 = _user$project$Main$clickInfo(mousePos);
-		var tilePos = _p1._0;
-		var dir = _p1._1;
-		return A3(_user$project$Board$rotateTile, tilePos, dir, board);
-	});
 var _user$project$Main$init = {
 	ctor: '_Tuple2',
-	_0: _user$project$Board$emptyBoard(5),
+	_0: {
+		ctor: '_Tuple2',
+		_0: false,
+		_1: _user$project$Board$emptyBoard(5)
+	},
 	_1: _elm_lang$core$Platform_Cmd$none
 };
 var _user$project$Main$NewBoardMsg = function (a) {
 	return {ctor: 'NewBoardMsg', _0: a};
 };
 var _user$project$Main$update = F2(
-	function (msg, model) {
-		var _p2 = msg;
-		switch (_p2.ctor) {
+	function (msg, _p1) {
+		var _p2 = _p1;
+		var _p8 = _p2;
+		var _p7 = _p2._0;
+		var _p6 = _p2._1;
+		var _p3 = msg;
+		switch (_p3.ctor) {
 			case 'MouseMsg':
-				return function (m) {
-					return {ctor: '_Tuple2', _0: m, _1: _elm_lang$core$Platform_Cmd$none};
-				}(
-					A2(_user$project$Main$updateRotation, _p2._0, model));
+				var _p4 = _user$project$Main$clickInfo(_p3._0);
+				var tilePos = _p4._0;
+				var dir = _p4._1;
+				var newBoard = _p7 ? A2(_user$project$Board$lockTile, tilePos, _p6) : A3(_user$project$Board$rotateTile, tilePos, dir, _p6);
+				return {
+					ctor: '_Tuple2',
+					_0: {ctor: '_Tuple2', _0: _p7, _1: newBoard},
+					_1: _elm_lang$core$Platform_Cmd$none
+				};
+			case 'KeyboardMsg':
+				var _p5 = _elm_lang$core$Char$fromCode(_p3._0);
+				if (_p5.valueOf() === 'L') {
+					return {
+						ctor: '_Tuple2',
+						_0: {ctor: '_Tuple2', _0: !_p7, _1: _p6},
+						_1: _elm_lang$core$Platform_Cmd$none
+					};
+				} else {
+					return {ctor: '_Tuple2', _0: _p8, _1: _elm_lang$core$Platform_Cmd$none};
+				}
+			case 'ToggleLockMsg':
+				return {
+					ctor: '_Tuple2',
+					_0: {ctor: '_Tuple2', _0: !_p7, _1: _p6},
+					_1: _elm_lang$core$Platform_Cmd$none
+				};
 			case 'NewGameMsg':
 				return {
 					ctor: '_Tuple2',
-					_0: model,
+					_0: _p8,
 					_1: A2(_elm_lang$core$Task$perform, _user$project$Main$NewBoardMsg, _elm_lang$core$Time$now)
 				};
 			default:
 				return {
 					ctor: '_Tuple2',
-					_0: A2(
-						_user$project$Board$generateBoard,
-						5,
-						_elm_lang$core$Random$initialSeed(
-							_elm_lang$core$Basics$round(_p2._0))),
+					_0: {
+						ctor: '_Tuple2',
+						_0: _p7,
+						_1: A2(
+							_user$project$Board$generateBoard,
+							5,
+							_elm_lang$core$Random$initialSeed(
+								_elm_lang$core$Basics$round(_p3._0)))
+					},
 					_1: _elm_lang$core$Platform_Cmd$none
 				};
 		}
 	});
 var _user$project$Main$NewGameMsg = {ctor: 'NewGameMsg'};
-var _user$project$Main$view = function (model) {
-	var board = _evancz$elm_graphics$Element$toHtml(
+var _user$project$Main$ToggleLockMsg = {ctor: 'ToggleLockMsg'};
+var _user$project$Main$view = function (_p9) {
+	var _p10 = _p9;
+	var render = _evancz$elm_graphics$Element$toHtml(
 		A3(
 			_evancz$elm_graphics$Collage$collage,
 			_user$project$Main$collageWidth,
 			_user$project$Main$collageHeight,
-			_user$project$Board$renderBoard(model)));
+			_user$project$Board$renderBoard(_p10._1)));
 	return A2(
 		_elm_lang$html$Html$div,
 		{ctor: '[]'},
 		{
 			ctor: '::',
-			_0: board,
+			_0: render,
 			_1: {
 				ctor: '::',
 				_0: A2(
@@ -12950,15 +13240,42 @@ var _user$project$Main$view = function (model) {
 						_0: _elm_lang$html$Html$text('New Game'),
 						_1: {ctor: '[]'}
 					}),
-				_1: {ctor: '[]'}
+				_1: {
+					ctor: '::',
+					_0: A2(
+						_elm_lang$html$Html$button,
+						{
+							ctor: '::',
+							_0: _elm_lang$html$Html_Events$onClick(_user$project$Main$ToggleLockMsg),
+							_1: {ctor: '[]'}
+						},
+						{
+							ctor: '::',
+							_0: _elm_lang$html$Html$text('Toggle Lock'),
+							_1: {ctor: '[]'}
+						}),
+					_1: {ctor: '[]'}
+				}
 			}
 		});
+};
+var _user$project$Main$KeyboardMsg = function (a) {
+	return {ctor: 'KeyboardMsg', _0: a};
 };
 var _user$project$Main$MouseMsg = function (a) {
 	return {ctor: 'MouseMsg', _0: a};
 };
 var _user$project$Main$subscriptions = function (model) {
-	return _elm_lang$mouse$Mouse$clicks(_user$project$Main$MouseMsg);
+	return _elm_lang$core$Platform_Sub$batch(
+		{
+			ctor: '::',
+			_0: _elm_lang$mouse$Mouse$clicks(_user$project$Main$MouseMsg),
+			_1: {
+				ctor: '::',
+				_0: _elm_lang$keyboard$Keyboard$downs(_user$project$Main$KeyboardMsg),
+				_1: {ctor: '[]'}
+			}
+		});
 };
 var _user$project$Main$main = _elm_lang$html$Html$program(
 	{init: _user$project$Main$init, view: _user$project$Main$view, update: _user$project$Main$update, subscriptions: _user$project$Main$subscriptions})();
