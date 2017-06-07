@@ -62,9 +62,13 @@ type alias Tile =
     }
 
 
+type alias TileDict =
+    Dict.Dict TilePos Tile
+
+
 type alias Board =
     { size : Int
-    , tiles : Dict.Dict TilePos Tile
+    , tiles : TileDict
     }
 
 
@@ -324,7 +328,7 @@ emptyTile size ( x, y ) =
 
 {-| Create tiles for an empty board.
 -}
-emptyBoardTiles : Int -> Dict.Dict TilePos Tile
+emptyBoardTiles : Int -> TileDict
 emptyBoardTiles size =
     let
         coords =
