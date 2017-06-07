@@ -9,6 +9,8 @@ import Board
 import Random
 import Task
 import Time
+import Keyboard
+import Char
 
 
 main =
@@ -25,12 +27,12 @@ main =
 
 
 type alias Model =
-    Board.Board
+    ( Bool, Board.Board )
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Board.emptyBoard 5, Cmd.none )
+    ( ( False, Board.emptyBoard 5 ), Cmd.none )
 
 
 
@@ -39,6 +41,8 @@ init =
 
 type Msg
     = MouseMsg Mouse.Position
+    | KeyboardMsg Keyboard.KeyCode
+    | ToggleLockMsg
     | NewGameMsg
     | NewBoardMsg Time.Time
 
@@ -65,26 +69,44 @@ clickInfo mousePos =
                 ( tilePos, Board.RotateCCW )
 
 
-updateRotation : Mouse.Position -> Model -> Model
-updateRotation mousePos board =
-    let
-        ( tilePos, dir ) =
-            clickInfo mousePos
-    in
-        Board.rotateTile tilePos dir board
-
-
-update msg model =
+update msg (( locking, board ) as model) =
     case msg of
         MouseMsg mousePos ->
-            updateRotation mousePos model
-                |> (\m -> ( m, Cmd.none ))
+            let
+                ( tilePos, dir ) =
+                    clickInfo mousePos
+
+                newBoard =
+                    if locking then
+                        Board.lockTile tilePos board
+                    else
+                        Board.rotateTile tilePos dir board
+            in
+                ( ( locking, newBoard ), Cmd.none )
+
+        KeyboardMsg keyCode ->
+            case Char.fromCode keyCode of
+                'L' ->
+                    ( ( not locking, board ), Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ToggleLockMsg ->
+            ( ( not locking, board ), Cmd.none )
 
         NewGameMsg ->
             ( model, Task.perform NewBoardMsg Time.now )
 
         NewBoardMsg time ->
-            ( Board.generateBoard 5 <| Random.initialSeed <| round time, Cmd.none )
+            ( ( locking
+              , Board.generateBoard 5 <|
+                    Random.initialSeed <|
+                        round
+                            time
+              )
+            , Cmd.none
+            )
 
 
 
@@ -92,7 +114,10 @@ update msg model =
 
 
 subscriptions model =
-    Mouse.clicks MouseMsg
+    Sub.batch
+        [ Mouse.clicks MouseMsg
+        , Keyboard.downs KeyboardMsg
+        ]
 
 
 
@@ -107,11 +132,15 @@ collageHeight =
     600
 
 
-view model =
+view ( _, board ) =
     let
-        board =
-            Board.renderBoard model
+        render =
+            Board.renderBoard board
                 |> Collage.collage collageWidth collageHeight
                 |> Element.toHtml
     in
-        Html.div [] [ board, Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ] ]
+        Html.div []
+            [ render
+            , Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
+            , Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
+            ]

@@ -8,6 +8,7 @@ module Board
         , emptyBoard
         , generateBoard
         , rotateTile
+        , lockTile
         , renderBoard
         )
 
@@ -59,6 +60,7 @@ type alias Tile =
     , connected : Bool
     , connections : Connections
     , barriers : Barriers
+    , locked : Bool
     }
 
 
@@ -87,26 +89,54 @@ getTile board pos =
 -- INPUT HANDLING
 
 
+{-| Lock/Unlock the tile at the given board coordinates.
+-}
+lockTile : TilePos -> Board -> Board
+lockTile pos board =
+    let
+        lockFn =
+            (\tile ->
+                case tile of
+                    Just t ->
+                        Just { t | locked = not t.locked }
+
+                    Nothing ->
+                        Nothing
+            )
+    in
+        { board | tiles = Dict.update pos lockFn board.tiles }
+
+
+{-| Rotate the given tile, only if it is unlocked.
+-}
+rotateWithLock : Rotation -> Maybe Tile -> Maybe Tile
+rotateWithLock dir tile =
+    let
+        rot =
+            case dir of
+                RotateCW ->
+                    1
+
+                RotateCCW ->
+                    -1
+    in
+        case tile of
+            Just t ->
+                if not t.locked then
+                    Just { t | connections = rotateList rot t.connections }
+                else
+                    Just t
+
+            _ ->
+                tile
+
+
 {-| Rotate the tlie at the given board coordinates in the given direction
 -}
 rotateTile : TilePos -> Rotation -> Board -> Board
 rotateTile pos dir board =
-    let
-        rotateFn =
-            (\tile ->
-                case ( tile, dir ) of
-                    ( Just t, RotateCW ) ->
-                        Just { t | connections = rotateList 1 t.connections }
-
-                    ( Just t, RotateCCW ) ->
-                        Just { t | connections = rotateList -1 t.connections }
-
-                    ( Nothing, _ ) ->
-                        Nothing
-            )
-    in
-        { board | tiles = Dict.update pos rotateFn board.tiles }
-            |> updateConnections
+    { board | tiles = Dict.update pos (rotateWithLock dir) board.tiles }
+        |> updateConnections
 
 
 
@@ -323,7 +353,7 @@ emptyTile size ( x, y ) =
         falses =
             List.repeat 4 False
     in
-        Tile x y tileType False falses falses
+        Tile x y tileType False falses falses False
 
 
 {-| Create tiles for an empty board.
@@ -414,7 +444,7 @@ connectTile tile dir board =
         { board | tiles = Dict.update ( tile.x, tile.y ) updateFn board.tiles }
 
 
-{-| Connection two tiles.
+{-| Connect two tiles.
 -}
 connectTiles : Tile -> Direction -> Tile -> Board -> Board
 connectTiles src dir dst board =
@@ -750,6 +780,17 @@ renderBackground tile =
     ]
 
 
+renderLock : Collage.Form
+renderLock =
+    Collage.square tileSize
+        |> Collage.filled Color.purple
+        |> Collage.alpha 0.5
+
+
+
+-- TODO: Can probably tidy the group/list handling up
+
+
 renderTile : ( TilePos, Tile ) -> Collage.Form
 renderTile ( pos, tile ) =
     let
@@ -766,7 +807,15 @@ renderTile ( pos, tile ) =
             renderForeground tile
 
         group =
-            Collage.group (background ++ connections ++ foreground)
+            if tile.locked then
+                Collage.group
+                    (background
+                        ++ connections
+                        ++ foreground
+                        ++ [ renderLock ]
+                    )
+            else
+                Collage.group (background ++ connections ++ foreground)
 
         move =
             Collage.move (tileCoordsToCollagePosition pos)
