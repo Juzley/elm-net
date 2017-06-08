@@ -35,8 +35,9 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    ( ( False, Board.emptyBoard 5 600 ),
-      Task.perform WindowSizeMsg Window.size )
+    ( ( False, Board.emptyBoard 13 600 )
+    , Task.perform WindowSizeMsg Window.size
+    )
 
 
 
@@ -83,7 +84,7 @@ update msg (( locking, board ) as model) =
 
         NewBoardMsg time ->
             ( ( False
-              , Board.generateBoard 5 board.renderSize <|
+              , Board.generateBoard 13 board.renderSize <|
                     Random.initialSeed <|
                         round time
               )
@@ -92,9 +93,10 @@ update msg (( locking, board ) as model) =
 
         WindowSizeMsg size ->
             let
-                newBoard = Board.setRenderSize board (boardRenderSize size)
+                newBoard =
+                    Board.setRenderSize board (boardRenderSize size)
             in
-                ( (locking, newBoard), Cmd.none )
+                ( ( locking, newBoard ), Cmd.none )
 
 
 

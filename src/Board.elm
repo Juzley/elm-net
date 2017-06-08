@@ -143,15 +143,14 @@ rotateWithLock dir tile =
                 RotateCCW ->
                     -1
     in
-        case tile of
-            Just t ->
+        Maybe.map
+            (\t ->
                 if not t.locked then
-                    Just { t | connections = rotateList rot t.connections }
+                    { t | connections = rotateList rot t.connections }
                 else
-                    Just t
-
-            _ ->
-                tile
+                    t
+            )
+            tile
 
 
 {-| Rotate the tlie at the given board coordinates in the given direction
@@ -268,12 +267,7 @@ tileConnectedNeighbours tile board =
 -}
 markTileConnected : Maybe Tile -> Maybe Tile
 markTileConnected tile =
-    case tile of
-        Just t ->
-            Just { t | connected = True }
-
-        Nothing ->
-            Nothing
+    Maybe.map (\t -> { t | connected = True }) tile
 
 
 {-| Update the board to mark a given tile as connected.
