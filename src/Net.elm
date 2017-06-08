@@ -29,13 +29,25 @@ main =
 -- Model
 
 
+type GameMode
+    = Init
+    | Playing
+    | GameOver
+
+
 type alias Model =
-    ( Bool, Board.Board )
+    { mode : GameMode
+    , board : Board.Board
+    , locking : Bool
+    }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( ( False, Board.emptyBoard 13 600 )
+    ( { mode = Init
+      , board = Board.emptyBoard 5 600
+      , locking = False
+      }
     , Task.perform WindowSizeMsg Window.size
     )
 
@@ -53,7 +65,13 @@ type Msg
     | WindowSizeMsg Window.Size
 
 
-update msg (( locking, board ) as model) =
+toggleLock : Model -> ( Model, Cmd Msg )
+toggleLock model =
+    ( { model | locking = not model.locking }, Cmd.none )
+
+
+playingUpdate : Msg -> Model -> ( Model, Cmd Msg )
+playingUpdate msg model =
     case msg of
         MouseMsg mousePos ->
             let
@@ -61,42 +79,59 @@ update msg (( locking, board ) as model) =
                     { mousePos | x = mousePos.x - menuWidth }
 
                 newBoard =
-                    if locking then
-                        Board.lockTile adjusted board
+                    if model.locking then
+                        Board.lockTile adjusted model.board
                     else
-                        Board.rotateTile adjusted board
+                        Board.rotateTile adjusted model.board
             in
-                ( ( locking, newBoard ), Cmd.none )
+                ( { model | board = newBoard }, Cmd.none )
+
+        NewBoardMsg time ->
+            let
+                newBoard =
+                    Random.initialSeed (round time)
+                        |> Board.generateBoard 13 model.board.renderSize
+            in
+                ( { model | locking = False, board = newBoard }, Cmd.none )
 
         KeyboardMsg keyCode ->
             case Char.fromCode keyCode of
                 'L' ->
-                    ( ( not locking, board ), Cmd.none )
+                    toggleLock model
 
                 _ ->
                     ( model, Cmd.none )
 
         ToggleLockMsg ->
-            ( ( not locking, board ), Cmd.none )
+            toggleLock model
 
+        _ ->
+            ( model, Cmd.none )
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
         NewGameMsg ->
-            ( model, Task.perform NewBoardMsg Time.now )
-
-        NewBoardMsg time ->
-            ( ( False
-              , Board.generateBoard 13 board.renderSize <|
-                    Random.initialSeed <|
-                        round time
-              )
-            , Cmd.none
-            )
+            ( { model | mode = Playing }, Task.perform NewBoardMsg Time.now )
 
         WindowSizeMsg size ->
             let
                 newBoard =
-                    Board.setRenderSize board (boardRenderSize size)
+                    Board.setRenderSize model.board (boardRenderSize size)
             in
-                ( ( locking, newBoard ), Cmd.none )
+                ( { model | board = newBoard }, Cmd.none )
+
+        _ ->
+            case model.mode of
+                Init ->
+                    ( model, Cmd.none )
+
+                Playing ->
+                    playingUpdate msg model
+
+                GameOver ->
+                    ( model, Cmd.none )
 
 
 
@@ -145,8 +180,12 @@ gameColumn =
     ]
 
 
-view ( _, board ) =
+view : Model -> Html Msg
+view model =
     let
+        board =
+            model.board
+
         render =
             Board.renderBoard board
                 |> Collage.collage board.renderSize board.renderSize
