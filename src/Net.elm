@@ -1,7 +1,9 @@
 module Main exposing (..)
 
-import Html
+import Style
+import Html exposing (..)
 import Html.Events
+import Html.Attributes
 import Collage
 import Element
 import Mouse
@@ -124,6 +126,27 @@ subscriptions model =
 -- View
 
 
+container : List Style.Style
+container =
+    [ Style.height Style.auto
+    , Style.overflow Style.hidden
+    ]
+
+
+menuColumn : List Style.Style
+menuColumn =
+    [ Style.width (Style.px 200)
+    , Style.float Style.right_
+    ]
+
+
+gameColumn : List Style.Style
+gameColumn =
+    [ Style.width Style.auto
+    , Style.overflow Style.hidden
+    ]
+
+
 collageWidth =
     600
 
@@ -139,8 +162,10 @@ view ( _, board ) =
                 |> Collage.collage collageWidth collageHeight
                 |> Element.toHtml
     in
-        Html.div []
-            [ render
-            , Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
-            , Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
+        Html.div [ Html.Attributes.style container ]
+            [ Html.div [ Html.Attributes.style menuColumn ]
+                [ Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
+                , Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
+                ]
+            , Html.div [ Html.Attributes.style gameColumn ] [ render ]
             ]
