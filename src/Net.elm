@@ -34,7 +34,7 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    ( ( False, Board.emptyBoard 5 ), Cmd.none )
+    ( ( False, Board.emptyBoard 5 collageWidth ), Cmd.none )
 
 
 
@@ -49,40 +49,18 @@ type Msg
     | NewBoardMsg Time.Time
 
 
-
--- TODO: Derive these from collage width and height, share with render.
-
-
-tileSize =
-    64
-
-
-clickInfo : Mouse.Position -> ( Board.TilePos, Board.Rotation )
-clickInfo mousePos =
-    let
-        tilePos =
-            ( mousePos.x // tileSize, mousePos.y // tileSize )
-    in
-        case (mousePos.x // (tileSize // 2)) % 2 of
-            0 ->
-                ( tilePos, Board.RotateCW )
-
-            _ ->
-                ( tilePos, Board.RotateCCW )
-
-
 update msg (( locking, board ) as model) =
     case msg of
         MouseMsg mousePos ->
             let
-                ( tilePos, dir ) =
-                    clickInfo mousePos
+                adjusted =
+                    { mousePos | x = mousePos.x - menuWidth }
 
                 newBoard =
                     if locking then
-                        Board.lockTile tilePos board
+                        Board.lockTile adjusted board
                     else
-                        Board.rotateTile tilePos dir board
+                        Board.rotateTile adjusted board
             in
                 ( ( locking, newBoard ), Cmd.none )
 
@@ -101,11 +79,10 @@ update msg (( locking, board ) as model) =
             ( model, Task.perform NewBoardMsg Time.now )
 
         NewBoardMsg time ->
-            ( ( False,
-              , Board.generateBoard 5 <|
+            ( ( False
+              , Board.generateBoard 5 collageWidth <|
                     Random.initialSeed <|
-                        round
-                            time
+                        round time
               )
             , Cmd.none
             )
@@ -126,24 +103,27 @@ subscriptions model =
 -- View
 
 
+menuWidth =
+    200
+
+
 container : List Style.Style
 container =
-    [ Style.height Style.auto
-    , Style.overflow Style.hidden
-    ]
+    []
 
 
 menuColumn : List Style.Style
 menuColumn =
-    [ Style.width (Style.px 200)
-    , Style.float Style.right_
+    [ Style.width (Style.px menuWidth)
+    , Style.float Style.left_
     ]
 
 
 gameColumn : List Style.Style
 gameColumn =
     [ Style.width Style.auto
-    , Style.overflow Style.hidden
+    , Style.alignItems Style.left_
+    , Style.marginLeft (Style.px menuWidth)
     ]
 
 
