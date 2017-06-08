@@ -13,6 +13,7 @@ import Task
 import Time
 import Keyboard
 import Char
+import Window
 
 
 main =
@@ -34,7 +35,8 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    ( ( False, Board.emptyBoard 5 collageWidth ), Cmd.none )
+    ( ( False, Board.emptyBoard 5 600 ),
+      Task.perform WindowSizeMsg Window.size )
 
 
 
@@ -47,6 +49,7 @@ type Msg
     | ToggleLockMsg
     | NewGameMsg
     | NewBoardMsg Time.Time
+    | WindowSizeMsg Window.Size
 
 
 update msg (( locking, board ) as model) =
@@ -80,12 +83,18 @@ update msg (( locking, board ) as model) =
 
         NewBoardMsg time ->
             ( ( False
-              , Board.generateBoard 5 collageWidth <|
+              , Board.generateBoard 5 board.renderSize <|
                     Random.initialSeed <|
                         round time
               )
             , Cmd.none
             )
+
+        WindowSizeMsg size ->
+            let
+                newBoard = Board.setRenderSize board (boardRenderSize size)
+            in
+                ( (locking, newBoard), Cmd.none )
 
 
 
@@ -96,6 +105,7 @@ subscriptions model =
     Sub.batch
         [ Mouse.clicks MouseMsg
         , Keyboard.downs KeyboardMsg
+        , Window.resizes WindowSizeMsg
         ]
 
 
@@ -103,6 +113,12 @@ subscriptions model =
 -- View
 
 
+boardRenderSize : Window.Size -> Int
+boardRenderSize size =
+    min (size.width - menuWidth) size.height
+
+
+menuWidth : Int
 menuWidth =
     200
 
@@ -127,19 +143,11 @@ gameColumn =
     ]
 
 
-collageWidth =
-    600
-
-
-collageHeight =
-    600
-
-
 view ( _, board ) =
     let
         render =
             Board.renderBoard board
-                |> Collage.collage collageWidth collageHeight
+                |> Collage.collage board.renderSize board.renderSize
                 |> Element.toHtml
     in
         Html.div [ Html.Attributes.style container ]

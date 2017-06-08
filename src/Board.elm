@@ -7,6 +7,7 @@ module Board
         , generateBoard
         , rotateTile
         , lockTile
+        , setRenderSize
         , renderBoard
         )
 
@@ -857,6 +858,11 @@ renderLock board =
 
 
 -- TODO: Can probably tidy the group/list handling up
+
+
+setRenderSize : Board -> Int -> Board
+setRenderSize board size =
+    { board | renderSize = size }
 
 
 renderTile : Board -> ( TilePos, Tile ) -> Collage.Form
