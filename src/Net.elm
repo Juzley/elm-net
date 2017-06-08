@@ -101,7 +101,7 @@ update msg (( locking, board ) as model) =
             ( model, Task.perform NewBoardMsg Time.now )
 
         NewBoardMsg time ->
-            ( ( locking
+            ( ( False,
               , Board.generateBoard 5 <|
                     Random.initialSeed <|
                         round
