@@ -29,6 +29,10 @@ main =
 -- Model
 
 
+defaultBoardSize =
+    5
+
+
 type GameMode
     = Init
     | Playing
@@ -40,15 +44,17 @@ type alias Model =
     , board : Board.Board
     , locking : Bool
     , gameTime : Int
+    , newBoardSize : Int
     }
 
 
 init : ( Model, Cmd Msg )
 init =
     ( { mode = Init
-      , board = Board.emptyBoard 5 600
+      , board = Board.emptyBoard defaultBoardSize 600
       , locking = False
       , gameTime = 0
+      , newBoardSize = defaultBoardSize
       }
     , Task.perform WindowSizeMsg Window.size
     )
@@ -66,6 +72,7 @@ type Msg
     | NewBoardMsg Time.Time
     | WindowSizeMsg Window.Size
     | TickMsg Time.Time
+    | BoardSizeMsg String
 
 
 toggleLock : Model -> ( Model, Cmd Msg )
@@ -130,7 +137,8 @@ update msg model =
             let
                 newBoard =
                     Random.initialSeed (round time)
-                        |> Board.generateBoard 13 model.board.renderSize
+                        |> Board.generateBoard model.newBoardSize
+                            model.board.renderSize
             in
                 ( { model
                     | mode = Playing
@@ -140,6 +148,17 @@ update msg model =
                   }
                 , Cmd.none
                 )
+
+        BoardSizeMsg sizeString ->
+            ( { model
+                | newBoardSize =
+                    Result.withDefault defaultBoardSize
+                        (String.toInt
+                            sizeString
+                        )
+              }
+            , Cmd.none
+            )
 
         _ ->
             case model.mode of
@@ -225,6 +244,26 @@ movesString model =
         |> String.join "/"
 
 
+boardSizeOptions : Model -> List (Html Msg)
+boardSizeOptions model =
+    let
+        extraAttrs n =
+            if n == model.newBoardSize then
+                [ Html.Attributes.selected True ]
+            else
+                []
+
+        attrs n =
+            (Html.Attributes.value (toString n)) :: (extraAttrs n)
+    in
+        List.range 3 13
+            |> List.filter (\n -> n % 2 == 1)
+            |> List.map
+                (\n ->
+                    Html.option (attrs n) [ Html.text (toString n) ]
+                )
+
+
 view : Model -> Html Msg
 view model =
     let
@@ -238,10 +277,11 @@ view model =
     in
         Html.div [ Html.Attributes.style container ]
             [ Html.div [ Html.Attributes.style menuColumn ]
-                [ Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
-                , Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
+                [ Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
                 , Html.p [] [ Html.text (movesString model) ]
                 , Html.p [] [ Html.text (gameTimeString model) ]
+                , Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
+                , Html.select [ Html.Events.onInput BoardSizeMsg ] (boardSizeOptions model)
                 ]
             , Html.div [ Html.Attributes.style gameColumn ] [ render ]
             ]
