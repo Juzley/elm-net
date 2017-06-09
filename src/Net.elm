@@ -92,14 +92,6 @@ playingUpdate msg model =
             in
                 ( { model | board = newBoard, mode = mode }, Cmd.none )
 
-        NewBoardMsg time ->
-            let
-                newBoard =
-                    Random.initialSeed (round time)
-                        |> Board.generateBoard 13 model.board.renderSize
-            in
-                ( { model | locking = False, board = newBoard }, Cmd.none )
-
         KeyboardMsg keyCode ->
             case Char.fromCode keyCode of
                 'L' ->
@@ -119,7 +111,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewGameMsg ->
-            ( { model | mode = Playing }, Task.perform NewBoardMsg Time.now )
+            ( model, Task.perform NewBoardMsg Time.now )
 
         WindowSizeMsg size ->
             let
@@ -127,6 +119,20 @@ update msg model =
                     Board.setRenderSize model.board (boardRenderSize size)
             in
                 ( { model | board = newBoard }, Cmd.none )
+
+        NewBoardMsg time ->
+            let
+                newBoard =
+                    Random.initialSeed (round time)
+                        |> Board.generateBoard 13 model.board.renderSize
+            in
+                ( { model
+                    | mode = Playing
+                    , locking = False
+                    , board = newBoard
+                  }
+                , Cmd.none
+                )
 
         _ ->
             case model.mode of
