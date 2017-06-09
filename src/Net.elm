@@ -135,10 +135,14 @@ update msg model =
 
         NewBoardMsg time ->
             let
-                newBoard =
+                seed =
                     Random.initialSeed (round time)
-                        |> Board.generateBoard model.newBoardSize
-                            model.board.renderSize
+
+                newBoard =
+                    Board.generateBoard model.newBoardSize
+                        model.board.renderSize
+                        seed
+                        True
             in
                 ( { model
                     | mode = Playing

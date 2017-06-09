@@ -194,7 +194,7 @@ rotateTile mousePos board =
 
         newTile =
             maybeCall tile
-                (emptyTile 0 ( 0, 0 ))
+                errorTile
                 (\t -> rotateUnlockedTile dir t)
     in
         if move then
@@ -435,6 +435,13 @@ emptyTile size ( x, y ) =
         Tile x y tileType False falses falses False
 
 
+{-| A tile to use when failing to look up tiles from the board.
+-}
+errorTile : Tile
+errorTile =
+    emptyTile 0 ( 0, 0 )
+
+
 {-| Create tiles for an empty board.
 -}
 emptyBoardTiles : Int -> TileDict
@@ -455,24 +462,98 @@ emptyBoard size renderSize =
     Board size (emptyBoardTiles size) Incomplete 0 0 Nothing renderSize
 
 
+{-| Add an edge barrier to a tile if is along an edge.
+-}
+addWrap : Direction -> Int -> Tile -> Tile
+addWrap dir boardSize tile =
+    let
+        mergeBarriers =
+            (\b t -> List.map2 (||) b t.barriers)
+    in
+        case dir of
+            Up ->
+                if tile.y == 0 then
+                    { tile
+                        | barriers = mergeBarriers [ True, False, False, False ] tile
+                    }
+                else
+                    tile
+
+            Right ->
+                if tile.x == boardSize - 1 then
+                    { tile
+                        | barriers = mergeBarriers [ False, True, False, False ] tile
+                    }
+                else
+                    tile
+
+            Down ->
+                if tile.y == boardSize - 1 then
+                    { tile
+                        | barriers = mergeBarriers [ False, False, True, False ] tile
+                    }
+                else
+                    tile
+
+            Left ->
+                if tile.x == 0 then
+                    { tile
+                        | barriers = mergeBarriers [ False, False, False, True ] tile
+                    }
+                else
+                    tile
+
+
+{-| Generate an empty board with barriers around the edge.
+-}
+wrappedBoard : Int -> Int -> Board
+wrappedBoard size renderSize =
+    let
+        board =
+            emptyBoard size renderSize
+
+        updateFn dir pos tile =
+            addWrap dir size tile
+    in
+        { board
+            | tiles =
+                board.tiles
+                    |> Dict.map (updateFn Up)
+                    |> Dict.map (updateFn Right)
+                    |> Dict.map (updateFn Down)
+                    |> Dict.map (updateFn Left)
+        }
+
+
 {-| Get the number of edges of a tile that don't currently have a connection.
 -}
 remainingConnections : Board -> TilePos -> Int
 remainingConnections board pos =
-    case getTile board pos of
-        Just t ->
-            t.connections
-                |> List.map
-                    (\c ->
-                        if c then
-                            0
-                        else
-                            1
-                    )
-                |> List.sum
+    4 - (connectionCount board pos)
 
-        Nothing ->
-            0
+
+{-| Get the number of edges of a tile that have connections.
+-}
+connectionCount : Board -> TilePos -> Int
+connectionCount board pos =
+    let
+        tile =
+            getTile board pos
+
+        countFn =
+            (\t ->
+                t.connections
+                    |> List.map
+                        (\c ->
+                            if c then
+                                1
+                            else
+                                0
+                        )
+                    |> List.sum
+            )
+    in
+        maybeCall tile 0 countFn
 
 
 {-| Get a list of surrounding tiles which haven't yet been visisted (i.e.
@@ -481,18 +562,23 @@ that tile from the start location, is returned.
 -}
 availablePaths : Board -> TilePos -> List ( Direction, Tile )
 availablePaths board pos =
-    tileNeighbours (getTile board pos) board
-        |> List.map
-            (\tile ->
-                case tile of
-                    Just t ->
-                        t
+    let
+        tile =
+            getTile board pos
 
-                    Nothing ->
-                        emptyTile 0 ( 0, 0 )
+        barriers =
+            maybeCall tile [ False, False, False, False ] (\t -> t.barriers)
+
+        filterFn =
+            (\( d, b, t ) ->
+                (not b) && remainingConnections board ( t.x, t.y ) == 4
             )
-        |> zipList [ Up, Right, Down, Left ]
-        |> List.filter (\( d, t ) -> remainingConnections board ( t.x, t.y ) == 4)
+    in
+        tileNeighbours (getTile board pos) board
+            |> List.map (\tile -> Maybe.withDefault errorTile tile)
+            |> List.map3 (,,) [ Up, Right, Down, Left ] barriers
+            |> List.filter filterFn
+            |> List.map (\( d, _, t ) -> ( d, t ))
 
 
 {-| Make a connection from a given tile in a given direction.
@@ -579,7 +665,7 @@ generateBoardHelper queue ( seed, board ) =
                 pathCount =
                     List.length (availablePaths board q)
             in
-                if remainingConnections board q <= 1 || pathCount == 0 then
+                if connectionCount board q >= 3 || pathCount == 0 then
                     generateBoardHelper qs ( seed, board )
                 else
                     makeNewConnection q qs ( seed, board )
@@ -747,11 +833,14 @@ shuffleBoard ( seed, board ) =
 
 {-| Generate a new board layout of a given size.
 -}
-generateBoard : Int -> Int -> Random.Seed -> Board
-generateBoard size renderSize seed =
+generateBoard : Int -> Int -> Random.Seed -> Bool -> Board
+generateBoard size renderSize seed wrapped =
     let
         board =
-            emptyBoard size renderSize
+            if wrapped then
+                wrappedBoard size renderSize
+            else
+                emptyBoard size renderSize
 
         mid =
             size // 2
@@ -997,6 +1086,10 @@ barrierRenderFunctions board =
         , Collage.move ( 0, -size / 2 ) (Collage.rotate (degrees 90) line)
         , Collage.move ( -size / 2, 0 ) line
         ]
+
+
+
+-- TODO: Fix barrier rendering
 
 
 renderBarriers : Board -> ( TilePos, Tile ) -> Collage.Form
