@@ -78,6 +78,9 @@ type alias Board =
     { size : Int
     , tiles : TileDict
     , state : BoardState
+    , moves : Int
+    , minMoves : Int
+    , lastMove : Maybe TilePos
     , renderSize : Int
     }
 
@@ -137,10 +140,11 @@ lockTile mousePos board =
         { board | tiles = Dict.update pos lockFn board.tiles }
 
 
-{-| Rotate the given tile, only if it is unlocked.
+{-| Rotate the given tile without a lock check - the caller must check whether
+the tile is locked.
 -}
-rotateWithLock : Rotation -> Maybe Tile -> Maybe Tile
-rotateWithLock dir tile =
+rotateUnlockedTile : Rotation -> Tile -> Tile
+rotateUnlockedTile dir tile =
     let
         rot =
             case dir of
@@ -150,14 +154,28 @@ rotateWithLock dir tile =
                 RotateCCW ->
                     -1
     in
-        Maybe.map
-            (\t ->
-                if not t.locked then
-                    { t | connections = rotateList rot t.connections }
-                else
-                    t
-            )
-            tile
+        { tile | connections = rotateList rot tile.connections }
+
+
+{-| Update the number of moves the player has made for this board.
+-}
+updateMoves : Maybe Tile -> Board -> Board
+updateMoves tile board =
+    case ( tile, board.lastMove ) of
+        ( Just t, Just l ) ->
+            if ( t.x, t.y ) /= l then
+                { board
+                    | moves = board.moves + 1
+                    , lastMove = Just ( t.x, t.y )
+                }
+            else
+                board
+
+        ( Just t, Nothing ) ->
+            { board | moves = board.moves + 1, lastMove = Just ( t.x, t.y ) }
+
+        _ ->
+            board
 
 
 {-| Rotate the tlie at the given board coordinates in the given direction
@@ -167,9 +185,24 @@ rotateTile mousePos board =
     let
         ( pos, dir ) =
             clickInfo mousePos board
+
+        tile =
+            getTile board pos
+
+        move =
+            maybeCall tile False (\t -> not t.locked)
+
+        newTile =
+            maybeCall tile
+                (emptyTile 0 ( 0, 0 ))
+                (\t -> rotateUnlockedTile dir t)
     in
-        { board | tiles = Dict.update pos (rotateWithLock dir) board.tiles }
-            |> updateConnections
+        if move then
+            { board | tiles = Dict.insert pos newTile board.tiles }
+                |> updateMoves tile
+                |> updateConnections
+        else
+            board
 
 
 
@@ -419,7 +452,7 @@ emptyBoardTiles size =
 -}
 emptyBoard : Int -> Int -> Board
 emptyBoard size renderSize =
-    Board size (emptyBoardTiles size) Incomplete renderSize
+    Board size (emptyBoardTiles size) Incomplete 0 0 Nothing renderSize
 
 
 {-| Get the number of edges of a tile that don't currently have a connection.
@@ -647,6 +680,36 @@ placeBarriers ( seed, board ) =
         )
 
 
+{-| Calculate the minimum number of moves to complete the board. Note this
+assumes that the board has a unique solution, which isn't necessarily true,
+so there may be cases where this minimum isn't the true minimum.
+-}
+minMoves : TileDict -> TileDict -> Int
+minMoves original shuffled =
+    let
+        toConnections =
+            (\dictEntry -> .connections <| Tuple.second dictEntry)
+
+        origConnections =
+            List.map toConnections <| Dict.toList original
+
+        shuffledConnections =
+            List.map toConnections <| Dict.toList shuffled
+
+        changes =
+            List.map2
+                (\o s ->
+                    if o == s then
+                        0
+                    else
+                        1
+                )
+                origConnections
+                shuffledConnections
+    in
+        List.sum changes
+
+
 {-| Randomly rotate tiles in a generated board.
 -}
 shuffleBoard : ( Random.Seed, Board ) -> Board
@@ -674,8 +737,12 @@ shuffleBoard ( seed, board ) =
                 )
                 tiles
                 rotates
+                |> Dict.fromList
     in
-        { board | tiles = (Dict.fromList newTiles) }
+        { board
+            | tiles = newTiles
+            , minMoves = minMoves board.tiles newTiles
+        }
 
 
 {-| Generate a new board layout of a given size.
