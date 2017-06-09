@@ -39,6 +39,7 @@ type alias Model =
     { mode : GameMode
     , board : Board.Board
     , locking : Bool
+    , gameTime : Int
     }
 
 
@@ -47,6 +48,7 @@ init =
     ( { mode = Init
       , board = Board.emptyBoard 5 600
       , locking = False
+      , gameTime = 0
       }
     , Task.perform WindowSizeMsg Window.size
     )
@@ -63,6 +65,7 @@ type Msg
     | NewGameMsg
     | NewBoardMsg Time.Time
     | WindowSizeMsg Window.Size
+    | TickMsg Time.Time
 
 
 toggleLock : Model -> ( Model, Cmd Msg )
@@ -103,6 +106,9 @@ playingUpdate msg model =
         ToggleLockMsg ->
             toggleLock model
 
+        TickMsg time ->
+            ( { model | gameTime = model.gameTime + 1 }, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
 
@@ -130,6 +136,7 @@ update msg model =
                     | mode = Playing
                     , locking = False
                     , board = newBoard
+                    , gameTime = 0
                   }
                 , Cmd.none
                 )
@@ -155,6 +162,7 @@ subscriptions model =
         [ Mouse.clicks MouseMsg
         , Keyboard.downs KeyboardMsg
         , Window.resizes WindowSizeMsg
+        , Time.every Time.second TickMsg
         ]
 
 
@@ -192,6 +200,31 @@ gameColumn =
     ]
 
 
+gameTimeString : Model -> String
+gameTimeString model =
+    let
+        hours =
+            model.gameTime // 3600
+
+        minutes =
+            (rem model.gameTime 3600) // 60
+
+        seconds =
+            rem model.gameTime 60
+    in
+        [ hours, minutes, seconds ]
+            |> List.map toString
+            |> List.map (String.pad 2 '0')
+            |> String.join ":"
+
+
+movesString : Model -> String
+movesString model =
+    [ model.board.moves, model.board.minMoves ]
+        |> List.map toString
+        |> String.join "/"
+
+
 view : Model -> Html Msg
 view model =
     let
@@ -207,6 +240,8 @@ view model =
             [ Html.div [ Html.Attributes.style menuColumn ]
                 [ Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
                 , Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
+                , Html.p [] [ Html.text (movesString model) ]
+                , Html.p [] [ Html.text (gameTimeString model) ]
                 ]
             , Html.div [ Html.Attributes.style gameColumn ] [ render ]
             ]
