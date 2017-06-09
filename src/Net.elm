@@ -83,8 +83,14 @@ playingUpdate msg model =
                         Board.lockTile adjusted model.board
                     else
                         Board.rotateTile adjusted model.board
+
+                mode =
+                    if newBoard.state == Board.Complete then
+                        GameOver
+                    else
+                        Playing
             in
-                ( { model | board = newBoard }, Cmd.none )
+                ( { model | board = newBoard, mode = mode }, Cmd.none )
 
         NewBoardMsg time ->
             let

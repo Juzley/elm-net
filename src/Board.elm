@@ -1,6 +1,7 @@
 module Board
     exposing
         ( Board
+        , BoardState(..)
         , Tile
         , TileType(..)
         , emptyBoard
@@ -34,6 +35,11 @@ type Direction
 type Rotation
     = RotateCW
     | RotateCCW
+
+
+type BoardState
+    = Complete
+    | Incomplete
 
 
 type alias TilePos =
@@ -71,6 +77,7 @@ type alias TileDict =
 type alias Board =
     { size : Int
     , tiles : TileDict
+    , state : BoardState
     , renderSize : Int
     }
 
@@ -169,7 +176,8 @@ rotateTile mousePos board =
 -- CONNECTION HANDLING
 
 
-{-| Recalculate which tiles are connected to the source
+{-| Recalculate which tiles are connected to the source. This also updates
+the board's state to indicate whether all tiles are connected or not.
 -}
 updateConnections : Board -> Board
 updateConnections board =
@@ -311,7 +319,11 @@ updateVisited tile visited =
 {-| Recursive helper function used by updateConnection. Maintains a queue
 of tiles to visit next, and a set of tiles already visited.
 -}
-updateConnectionsHelper : List (Maybe Tile) -> Set.Set TilePos -> Board -> Board
+updateConnectionsHelper :
+    List (Maybe Tile)
+    -> Set.Set TilePos
+    -> Board
+    -> Board
 updateConnectionsHelper queue visited board =
     case queue of
         tile :: tiles ->
@@ -329,7 +341,20 @@ updateConnectionsHelper queue visited board =
                     |> updateConnectionsHelper (neighbours ++ tiles) newVisited
 
         [] ->
-            board
+            let
+                tileCount =
+                    board.size * board.size
+
+                visitedCount =
+                    Set.size visited
+
+                state =
+                    if tileCount == visitedCount then
+                        Complete
+                    else
+                        Incomplete
+            in
+                { board | state = state }
 
 
 {-| Get the 'source' tile for a given board
@@ -394,7 +419,7 @@ emptyBoardTiles size =
 -}
 emptyBoard : Int -> Int -> Board
 emptyBoard size renderSize =
-    Board size (emptyBoardTiles size) renderSize
+    Board size (emptyBoardTiles size) Incomplete renderSize
 
 
 {-| Get the number of edges of a tile that don't currently have a connection.
