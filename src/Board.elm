@@ -853,9 +853,9 @@ tileSizeFloat board =
     toFloat (tileSizeInt board)
 
 
-lineWidth : Int -> Float
-lineWidth renderSize =
-    4 + ((toFloat renderSize) - 300) * 0.01
+lineWidth : Board -> Float
+lineWidth board =
+    tileSizeFloat board / 12
 
 
 collageTop : Board -> Int
@@ -907,7 +907,7 @@ renderConnection board tile translation rotation =
             connectionColor tile
 
         width =
-            lineWidth board.renderSize
+            lineWidth board
 
         form =
             Collage.filled color (Collage.rect width size)
@@ -1059,37 +1059,57 @@ renderTile board ( pos, tile ) =
         move group
 
 
-barrierRenderFunctions : Board -> List Collage.Form
-barrierRenderFunctions board =
+barrierRenderFunctions : Board -> TilePos -> List Collage.Form
+barrierRenderFunctions board pos =
     let
         size =
             tileSizeFloat board
 
         width =
-            1.7 * lineWidth board.renderSize
+            1.4 * lineWidth board
 
         line =
             Collage.filled Color.darkPurple (Collage.rect width size)
 
-        translate =
-            size / 2
+        edgeTranslate =
+            size / 2 - width / 2 + 1
+
+        upFn =
+            if Tuple.second pos == 0 then
+                Collage.move ( 0, edgeTranslate)
+                    (Collage.rotate (degrees 90) line)
+            else
+                Collage.move ( 0, size / 2)
+                    (Collage.rotate (degrees 90) line)
+
+        rightFn =
+            if Tuple.first pos == board.size - 1 then
+                Collage.move ( edgeTranslate, 0 ) line
+            else
+                Collage.move ( size / 2, 0 ) line
+
+        downFn =
+            if Tuple.second pos == board.size - 1 then
+                Collage.move ( 0, -edgeTranslate )
+                    (Collage.rotate (degrees 90) line)     
+            else
+                Collage.move ( 0, -size / 2 )
+                    (Collage.rotate (degrees 90) line)     
+
+        leftFn =
+            if Tuple.first pos == 0 then
+                Collage.move ( -edgeTranslate, 0 ) line
+            else
+                Collage.move ( -size / 2, 0 ) line
     in
-        [ Collage.move ( 0, translate ) (Collage.rotate (degrees 90) line)
-        , Collage.move ( translate, 0 ) line
-        , Collage.move ( 0, -translate ) (Collage.rotate (degrees 90) line)
-        , Collage.move ( -translate, 0 ) line
-        ]
-
-
-
--- TODO: Fix barrier rendering
+        [ upFn, rightFn, downFn, leftFn ] 
 
 
 renderBarriers : Board -> ( TilePos, Tile ) -> Collage.Form
 renderBarriers board ( pos, tile ) =
     let
         zipped =
-            List.map2 (,) tile.barriers (barrierRenderFunctions board)
+            List.map2 (,) tile.barriers (barrierRenderFunctions board pos)
 
         filtered =
             List.map Tuple.second (List.filter Tuple.first zipped)
