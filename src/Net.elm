@@ -45,6 +45,7 @@ type alias Model =
     , locking : Bool
     , gameTime : Int
     , newBoardSize : Int
+    , newBoardWrapping : Bool
     }
 
 
@@ -55,6 +56,7 @@ init =
       , locking = False
       , gameTime = 0
       , newBoardSize = defaultBoardSize
+      , newBoardWrapping = False
       }
     , Task.perform WindowSizeMsg Window.size
     )
@@ -73,6 +75,7 @@ type Msg
     | WindowSizeMsg Window.Size
     | TickMsg Time.Time
     | BoardSizeMsg String
+    | ToggleWrappingMsg
 
 
 toggleLock : Model -> ( Model, Cmd Msg )
@@ -142,7 +145,7 @@ update msg model =
                     Board.generateBoard model.newBoardSize
                         model.board.renderSize
                         seed
-                        True
+                        (not model.newBoardWrapping)
             in
                 ( { model
                     | mode = Playing
@@ -161,6 +164,11 @@ update msg model =
                             sizeString
                         )
               }
+            , Cmd.none
+            )
+
+        ToggleWrappingMsg ->
+            ( { model | newBoardWrapping = not model.newBoardWrapping }
             , Cmd.none
             )
 
@@ -268,6 +276,18 @@ boardSizeOptions model =
                 )
 
 
+checkbox : msg -> String -> Html msg
+checkbox msg name =
+    Html.label []
+        [ Html.input
+            [ Html.Attributes.type_ "checkbox"
+            , Html.Events.onClick msg
+            ]
+            []
+        , Html.text name
+        ]
+
+
 view : Model -> Html Msg
 view model =
     let
@@ -286,6 +306,7 @@ view model =
                 , Html.p [] [ Html.text (gameTimeString model) ]
                 , Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
                 , Html.select [ Html.Events.onInput BoardSizeMsg ] (boardSizeOptions model)
+                , checkbox ToggleWrappingMsg "Wrapping"
                 ]
             , Html.div [ Html.Attributes.style gameColumn ] [ render ]
             ]

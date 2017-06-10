@@ -506,8 +506,8 @@ addWrap dir boardSize tile =
 
 {-| Generate an empty board with barriers around the edge.
 -}
-wrappedBoard : Int -> Int -> Board
-wrappedBoard size renderSize =
+enclosedBoard : Int -> Int -> Board
+enclosedBoard size renderSize =
     let
         board =
             emptyBoard size renderSize
@@ -677,23 +677,9 @@ generateBoardHelper queue ( seed, board ) =
 {-| Place a single barrier on the given side of a given tile, only if a
 connection isn't needed through that edge.
 -}
-placeBarrier : Tile -> Direction -> Bool -> Board -> Board
-placeBarrier tile dir value board =
+placeBarrier : Tile -> List Bool -> Board -> Board
+placeBarrier tile merge board =
     let
-        merge =
-            case dir of
-                Up ->
-                    [ value, False, False, False ]
-
-                Right ->
-                    [ False, value, False, False ]
-
-                Down ->
-                    [ False, False, value, False ]
-
-                Left ->
-                    [ False, False, False, value ]
-
         barriers =
             List.map3 (\bar mer con -> (bar || mer) && not con)
                 tile.barriers
@@ -710,7 +696,7 @@ placeBarrier tile dir value board =
 neighbouring tiles with the barriers.
 -}
 placeTileBarriers : ( TilePos, ( Bool, Bool ) ) -> Board -> Board
-placeTileBarriers ( pos, ( vert, horiz ) ) board =
+placeTileBarriers ( pos, ( horiz, vert ) ) board =
     let
         tile =
             getTile board pos
@@ -721,10 +707,9 @@ placeTileBarriers ( pos, ( vert, horiz ) ) board =
         case ( tile, neighbours ) of
             ( Just t, [ Just up, Just right, _, _ ] ) ->
                 board
-                    |> placeBarrier t Up vert
-                    |> placeBarrier t Right horiz
-                    |> placeBarrier up Down vert
-                    |> placeBarrier right Left horiz
+                    |> placeBarrier t [ horiz, vert, False, False ]
+                    |> placeBarrier up [ False, False, horiz, False ]
+                    |> placeBarrier right [ False, False, False, vert ]
 
             _ ->
                 board
@@ -834,11 +819,11 @@ shuffleBoard ( seed, board ) =
 {-| Generate a new board layout of a given size.
 -}
 generateBoard : Int -> Int -> Random.Seed -> Bool -> Board
-generateBoard size renderSize seed wrapped =
+generateBoard size renderSize seed enclosed =
     let
         board =
-            if wrapped then
-                wrappedBoard size renderSize
+            if enclosed then
+                enclosedBoard size renderSize
             else
                 emptyBoard size renderSize
 
@@ -868,10 +853,9 @@ tileSizeFloat board =
     toFloat (tileSizeInt board)
 
 
-{-| TODO: scale this with board size
--}
-lineWidth =
-    4
+lineWidth : Int -> Float
+lineWidth renderSize =
+    4 + ((toFloat renderSize) - 300) * 0.01
 
 
 collageTop : Board -> Int
@@ -922,8 +906,11 @@ renderConnection board tile translation rotation =
         color =
             connectionColor tile
 
+        width =
+            lineWidth board.renderSize
+
         form =
-            Collage.filled color (Collage.rect lineWidth size)
+            Collage.filled color (Collage.rect width size)
     in
         form
             |> Collage.move translation
@@ -1078,13 +1065,19 @@ barrierRenderFunctions board =
         size =
             tileSizeFloat board
 
+        width =
+            1.7 * lineWidth board.renderSize
+
         line =
-            Collage.filled Color.darkBlue (Collage.rect (lineWidth * 2) size)
+            Collage.filled Color.darkPurple (Collage.rect width size)
+
+        translate =
+            size / 2
     in
-        [ Collage.move ( 0, size / 2 ) (Collage.rotate (degrees 90) line)
-        , Collage.move ( size / 2, 0 ) line
-        , Collage.move ( 0, -size / 2 ) (Collage.rotate (degrees 90) line)
-        , Collage.move ( -size / 2, 0 ) line
+        [ Collage.move ( 0, translate ) (Collage.rotate (degrees 90) line)
+        , Collage.move ( translate, 0 ) line
+        , Collage.move ( 0, -translate ) (Collage.rotate (degrees 90) line)
+        , Collage.move ( -translate, 0 ) line
         ]
 
 
