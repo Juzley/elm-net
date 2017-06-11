@@ -14,6 +14,9 @@ import Time
 import Keyboard
 import Char
 import Window
+import Bootstrap.Modal as Modal
+import Bootstrap.Button as Button
+import Bootstrap.CDN
 
 
 main =
@@ -46,6 +49,7 @@ type alias Model =
     , gameTime : Int
     , newBoardSize : Int
     , newBoardWrapping : Bool
+    , endGameModalState : Modal.State
     }
 
 
@@ -57,6 +61,7 @@ init =
       , gameTime = 0
       , newBoardSize = defaultBoardSize
       , newBoardWrapping = False
+      , endGameModalState = Modal.hiddenState
       }
     , Task.perform WindowSizeMsg Window.size
     )
@@ -76,6 +81,7 @@ type Msg
     | TickMsg Time.Time
     | BoardSizeMsg String
     | ToggleWrappingMsg
+    | EndGameModalMsg Modal.State
 
 
 toggleLock : Model -> ( Model, Cmd Msg )
@@ -103,7 +109,18 @@ playingUpdate msg model =
                     else
                         Playing
             in
-                ( { model | board = newBoard, mode = mode }, Cmd.none )
+                case newBoard.state of
+                    Board.Complete ->
+                        ( { model
+                            | board = newBoard
+                            , mode = GameOver
+                            , endGameModalState = Modal.visibleState
+                          }
+                        , Cmd.none
+                        )
+
+                    _ ->
+                        ( { model | board = newBoard }, Cmd.none )
 
         KeyboardMsg keyCode ->
             case Char.fromCode keyCode of
@@ -127,7 +144,9 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewGameMsg ->
-            ( model, Task.perform NewBoardMsg Time.now )
+            ( { model | endGameModalState = Modal.hiddenState }
+            , Task.perform NewBoardMsg Time.now
+            )
 
         WindowSizeMsg size ->
             let
@@ -171,6 +190,9 @@ update msg model =
             ( { model | newBoardWrapping = not model.newBoardWrapping }
             , Cmd.none
             )
+
+        EndGameModalMsg state ->
+            ( { model | endGameModalState = state }, Cmd.none )
 
         _ ->
             case model.mode of
@@ -288,6 +310,27 @@ checkbox msg name =
         ]
 
 
+
+-- TODO: Make this look better, calculate score
+
+
+endGameModal : Model -> Html Msg
+endGameModal model =
+    Modal.config EndGameModalMsg
+        |> Modal.h4 [] [ Html.text "You Win!" ]
+        |> Modal.body []
+            [ Html.p [] [ Html.text <| "Moves: " ++ movesString model ]
+            , Html.p [] [ Html.text <| "Time: " ++ gameTimeString model ]
+            , Html.p [] [ Html.text "Score: 0" ]
+            ]
+        |> Modal.footer []
+            [ Button.button
+                [ Button.attrs [ Html.Events.onClick NewGameMsg ] ]
+                [ Html.text "Restart" ]
+            ]
+        |> Modal.view model.endGameModalState
+
+
 view : Model -> Html Msg
 view model =
     let
@@ -300,7 +343,8 @@ view model =
                 |> Element.toHtml
     in
         Html.div [ Html.Attributes.style container ]
-            [ Html.div [ Html.Attributes.style menuColumn ]
+            [ Bootstrap.CDN.stylesheet
+            , Html.div [ Html.Attributes.style menuColumn ]
                 [ Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
                 , Html.p [] [ Html.text (movesString model) ]
                 , Html.p [] [ Html.text (gameTimeString model) ]
@@ -309,4 +353,5 @@ view model =
                 , checkbox ToggleWrappingMsg "Wrapping"
                 ]
             , Html.div [ Html.Attributes.style gameColumn ] [ render ]
+            , endGameModal model
             ]

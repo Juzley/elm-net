@@ -111,7 +111,7 @@ clickInfo mousePos board =
         tilePos =
             ( mousePos.x // size, mousePos.y // size )
 
-        info = 
+        info =
             case (mousePos.x // (size // 2)) % 2 of
                 0 ->
                     ( tilePos, RotateCW )
@@ -120,9 +120,14 @@ clickInfo mousePos board =
                     ( tilePos, RotateCCW )
 
         inBounds =
-            mousePos.x > 0 && mousePos.y > 0 &&
-            mousePos.x < board.renderSize &&
-            mousePos.y < board.renderSize
+            mousePos.x
+                > 0
+                && mousePos.y
+                > 0
+                && mousePos.x
+                < board.renderSize
+                && mousePos.y
+                < board.renderSize
     in
         if inBounds then
             Just info
@@ -135,7 +140,7 @@ clickInfo mousePos board =
 lockTile : Mouse.Position -> Board -> Board
 lockTile mousePos board =
     let
-        click = 
+        click =
             clickInfo mousePos board
 
         lockFn =
@@ -149,7 +154,7 @@ lockTile mousePos board =
             )
     in
         case click of
-            Just (pos, _) ->
+            Just ( pos, _ ) ->
                 { board | tiles = Dict.update pos lockFn board.tiles }
 
             Nothing ->
@@ -203,7 +208,8 @@ rotateTile mousePos board =
             clickInfo mousePos board
 
         ( tile, pos, dir ) =
-            maybeCall click ( Nothing, (0, 0), RotateCW )
+            maybeCall click
+                ( Nothing, ( 0, 0 ), RotateCW )
                 (\( p, d ) -> ( getTile board p, p, d ))
 
         move =
@@ -1108,10 +1114,10 @@ barrierRenderFunctions board pos =
 
         upFn =
             if Tuple.second pos == 0 then
-                Collage.move ( 0, edgeTranslate)
+                Collage.move ( 0, edgeTranslate )
                     (Collage.rotate (degrees 90) line)
             else
-                Collage.move ( 0, size / 2)
+                Collage.move ( 0, size / 2 )
                     (Collage.rotate (degrees 90) line)
 
         rightFn =
@@ -1123,10 +1129,10 @@ barrierRenderFunctions board pos =
         downFn =
             if Tuple.second pos == board.size - 1 then
                 Collage.move ( 0, -edgeTranslate )
-                    (Collage.rotate (degrees 90) line)     
+                    (Collage.rotate (degrees 90) line)
             else
                 Collage.move ( 0, -size / 2 )
-                    (Collage.rotate (degrees 90) line)     
+                    (Collage.rotate (degrees 90) line)
 
         leftFn =
             if Tuple.first pos == 0 then
@@ -1134,7 +1140,7 @@ barrierRenderFunctions board pos =
             else
                 Collage.move ( -size / 2, 0 ) line
     in
-        [ upFn, rightFn, downFn, leftFn ] 
+        [ upFn, rightFn, downFn, leftFn ]
 
 
 renderBarriers : Board -> ( TilePos, Tile ) -> Collage.Form
