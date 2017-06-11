@@ -102,7 +102,7 @@ getTile board pos =
 
 {-| Determine which tile a click has hit.
 -}
-clickInfo : Mouse.Position -> Board -> ( TilePos, Rotation )
+clickInfo : Mouse.Position -> Board -> Maybe ( TilePos, Rotation )
 clickInfo mousePos board =
     let
         size =
@@ -110,13 +110,24 @@ clickInfo mousePos board =
 
         tilePos =
             ( mousePos.x // size, mousePos.y // size )
-    in
-        case (mousePos.x // (size // 2)) % 2 of
-            0 ->
-                ( tilePos, RotateCW )
 
-            _ ->
-                ( tilePos, RotateCCW )
+        info = 
+            case (mousePos.x // (size // 2)) % 2 of
+                0 ->
+                    ( tilePos, RotateCW )
+
+                _ ->
+                    ( tilePos, RotateCCW )
+
+        inBounds =
+            mousePos.x > 0 && mousePos.y > 0 &&
+            mousePos.x < board.renderSize &&
+            mousePos.y < board.renderSize
+    in
+        if inBounds then
+            Just info
+        else
+            Nothing
 
 
 {-| Lock/Unlock the tile at the given board coordinates.
@@ -124,7 +135,7 @@ clickInfo mousePos board =
 lockTile : Mouse.Position -> Board -> Board
 lockTile mousePos board =
     let
-        ( pos, _ ) =
+        click = 
             clickInfo mousePos board
 
         lockFn =
@@ -137,7 +148,12 @@ lockTile mousePos board =
                         Nothing
             )
     in
-        { board | tiles = Dict.update pos lockFn board.tiles }
+        case click of
+            Just (pos, _) ->
+                { board | tiles = Dict.update pos lockFn board.tiles }
+
+            Nothing ->
+                board
 
 
 {-| Rotate the given tile without a lock check - the caller must check whether
@@ -183,11 +199,12 @@ updateMoves tile board =
 rotateTile : Mouse.Position -> Board -> Board
 rotateTile mousePos board =
     let
-        ( pos, dir ) =
+        click =
             clickInfo mousePos board
 
-        tile =
-            getTile board pos
+        ( tile, pos, dir ) =
+            maybeCall click ( Nothing, (0, 0), RotateCW )
+                (\( p, d ) -> ( getTile board p, p, d ))
 
         move =
             maybeCall tile False (\t -> not t.locked)
