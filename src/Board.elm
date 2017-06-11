@@ -649,8 +649,17 @@ makeNewConnection pos queue ( seed, board ) =
         pathCount =
             List.length paths
 
-        ( selected, newSeed ) =
+        ( selected, seed1 ) =
             Random.step (Random.int 1 (pathCount)) seed
+
+        branchChance =
+            0.3
+
+        gen =
+            Random.float 0 1 |> Random.map ((>) branchChance)
+
+        ( branch, newSeed ) =
+            Random.step gen seed
 
         path =
             List.drop (selected - 1) paths |> List.head
@@ -663,8 +672,14 @@ makeNewConnection pos queue ( seed, board ) =
                 let
                     newBoard =
                         connectTiles src dir dst board
+
+                    newQueue =
+                        if branch then
+                            pos :: ( dst.x, dst.y ) :: queue
+                        else
+                            ( dst.x, dst.y ) :: pos :: queue
                 in
-                    generateBoardHelper (( dst.x, dst.y ) :: pos :: queue) ( newSeed, newBoard )
+                    generateBoardHelper newQueue ( newSeed, newBoard )
 
             _ ->
                 generateBoardHelper queue ( newSeed, board )
