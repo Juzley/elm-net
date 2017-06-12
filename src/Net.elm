@@ -50,6 +50,7 @@ type alias Model =
     , newBoardSize : Int
     , newBoardWrapping : Bool
     , endGameModalState : Modal.State
+    , newGameModalState : Modal.State
     }
 
 
@@ -62,6 +63,7 @@ init =
       , newBoardSize = defaultBoardSize
       , newBoardWrapping = False
       , endGameModalState = Modal.hiddenState
+      , newGameModalState = Modal.hiddenState
       }
     , Task.perform WindowSizeMsg Window.size
     )
@@ -82,6 +84,7 @@ type Msg
     | BoardSizeMsg String
     | ToggleWrappingMsg
     | EndGameModalMsg Modal.State
+    | NewGameModalMsg Modal.State
 
 
 toggleLock : Model -> ( Model, Cmd Msg )
@@ -144,7 +147,10 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewGameMsg ->
-            ( { model | endGameModalState = Modal.hiddenState }
+            ( { model
+                | endGameModalState = Modal.hiddenState
+                , newGameModalState = Modal.hiddenState
+              }
             , Task.perform NewBoardMsg Time.now
             )
 
@@ -194,6 +200,9 @@ update msg model =
         EndGameModalMsg state ->
             ( { model | endGameModalState = state }, Cmd.none )
 
+        NewGameModalMsg state ->
+            ( { model | newGameModalState = state }, Cmd.none )
+
         _ ->
             case model.mode of
                 Init ->
@@ -241,6 +250,7 @@ container =
 menuColumn : List Style.Style
 menuColumn =
     [ Style.width (Style.px menuWidth)
+    , Style.padding (Style.px 10)
     , Style.float Style.left_
     ]
 
@@ -331,6 +341,63 @@ endGameModal model =
         |> Modal.view model.endGameModalState
 
 
+newGameModal : Model -> Html Msg
+newGameModal model =
+    Modal.config NewGameModalMsg
+        |> Modal.h4 [] [ Html.text "Start New Game" ]
+        |> Modal.body []
+            [ Html.select [ Html.Events.onInput BoardSizeMsg ] (boardSizeOptions model)
+            , checkbox ToggleWrappingMsg "Wrapping"
+            ]
+        |> Modal.footer []
+            [ Button.button
+                [ Button.attrs [ Html.Events.onClick NewGameMsg ] ]
+                [ Html.text "Start" ]
+            ]
+        |> Modal.view model.newGameModalState
+
+
+lockButton : Model -> Html Msg
+lockButton model =
+    let
+        attrs =
+            if model.locking then
+                Button.attrs [ Html.Attributes.class "active" ]
+            else
+                Button.attrs []
+    in
+        Button.button
+            [ attrs, Button.primary, Button.block, Button.onClick ToggleLockMsg ]
+            [ Html.text "Toggle Lock" ]
+
+
+newGameButton : Html Msg
+newGameButton =
+    Button.button
+        [ Button.primary
+        , Button.block
+        , Button.onClick (NewGameModalMsg Modal.visibleState)
+        ]
+        [ Html.text "New Game" ]
+
+
+menu : Model -> Html Msg
+menu model =
+    let
+        contents =
+            if model.mode == Init then
+                [ newGameButton ]
+            else
+                [ newGameButton
+                , Html.hr [] []
+                , lockButton model
+                , Html.p [] [ Html.text (movesString model) ]
+                , Html.p [] [ Html.text (gameTimeString model) ]
+                ]
+    in
+        Html.div [ Html.Attributes.style menuColumn ] contents
+
+
 view : Model -> Html Msg
 view model =
     let
@@ -343,15 +410,10 @@ view model =
                 |> Element.toHtml
     in
         Html.div [ Html.Attributes.style container ]
+            -- TODO: Remove the CDN stuff
             [ Bootstrap.CDN.stylesheet
-            , Html.div [ Html.Attributes.style menuColumn ]
-                [ Html.button [ Html.Events.onClick ToggleLockMsg ] [ Html.text "Toggle Lock" ]
-                , Html.p [] [ Html.text (movesString model) ]
-                , Html.p [] [ Html.text (gameTimeString model) ]
-                , Html.button [ Html.Events.onClick NewGameMsg ] [ Html.text "New Game" ]
-                , Html.select [ Html.Events.onInput BoardSizeMsg ] (boardSizeOptions model)
-                , checkbox ToggleWrappingMsg "Wrapping"
-                ]
+            , menu model
             , Html.div [ Html.Attributes.style gameColumn ] [ render ]
+            , newGameModal model
             , endGameModal model
             ]
