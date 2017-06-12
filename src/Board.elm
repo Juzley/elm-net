@@ -1056,10 +1056,6 @@ renderLock board =
         |> Collage.alpha 0.5
 
 
-
--- TODO: Can probably tidy the group/list handling up
-
-
 setRenderSize : Board -> Int -> Board
 setRenderSize board size =
     { board | renderSize = size }
