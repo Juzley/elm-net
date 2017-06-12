@@ -1,4 +1,4 @@
-module Main exposing (..)
+module Net exposing (..)
 
 import Style
 import Html exposing (..)
@@ -308,7 +308,6 @@ newGameOption =
     , Style.fontSize (Style.em 1.2)
     , Style.fontWeight "bold"
     , Style.fontFamily "sans-serif"
-    , Style.color "#025aa5"
     ]
 
 
