@@ -254,6 +254,31 @@ menuColumn =
     , Style.float Style.left_
     ]
 
+menuItem : List Style.Style
+menuItem =
+    []
+
+menuHeader : List Style.Style
+menuHeader =
+    [ Style.display Style.block
+    , Style.fontWeight "bold"
+    , Style.fontVariant Style.smallCaps
+    , Style.fontSize (Style.em 1.5)
+    , Style.marginTop (Style.em 1.5)
+    , Style.color "#025aa5"
+    , Style.fontFamily "sans-serif"
+    ]
+
+menuContent : List Style.Style
+menuContent =
+    [ Style.display Style.block
+    , Style.textAlign "right"
+    , Style.fontWeight "bold"
+    , Style.fontSize (Style.em 3)
+    , Style.lineHeight (Style.em 1)
+    , Style.letterSpacing (Style.px 2)
+    , Style.fontFamily "sans-serif"
+    ]
 
 gameColumn : List Style.Style
 gameColumn =
@@ -266,16 +291,13 @@ gameColumn =
 gameTimeString : Model -> String
 gameTimeString model =
     let
-        hours =
-            model.gameTime // 3600
-
         minutes =
-            (rem model.gameTime 3600) // 60
+            model.gameTime // 60
 
         seconds =
             rem model.gameTime 60
     in
-        [ hours, minutes, seconds ]
+        [ minutes, seconds ]
             |> List.map toString
             |> List.map (String.pad 2 '0')
             |> String.join ":"
@@ -391,8 +413,16 @@ menu model =
                 [ newGameButton
                 , Html.hr [] []
                 , lockButton model
-                , Html.p [] [ Html.text (movesString model) ]
-                , Html.p [] [ Html.text (gameTimeString model) ]
+                , Html.p [ Html.Attributes.style menuItem ]
+                    [ Html.span [ Html.Attributes.style menuHeader ]
+                        [ Html.text "moves" ]
+                    , Html.span [ Html.Attributes.style menuContent ]
+                        [ Html.text (movesString model) ]
+                    , Html.span [ Html.Attributes.style menuHeader ]
+                        [Html.text "time" ]
+                    , Html.span [ Html.Attributes.style menuContent ]
+                        [ Html.text (gameTimeString model) ]
+                    ]
                 ]
     in
         Html.div [ Html.Attributes.style menuColumn ] contents
