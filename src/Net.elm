@@ -1,4 +1,4 @@
-module Net exposing (..)
+module Main exposing (..)
 
 import Style
 import Html exposing (..)
@@ -253,30 +253,35 @@ menuColumn =
     , Style.float Style.left_
     ]
 
+
 menuItem : List Style.Style
 menuItem =
     []
+
 
 menuHeader : List Style.Style
 menuHeader =
     [ Style.display Style.block
     , Style.fontWeight "bold"
     , Style.fontVariant Style.smallCaps
-    , Style.fontSize (Style.em 1)
-    , Style.marginTop (Style.em 2)
-    , Style.letterSpacing (Style.px 1)
-    , Style.color "blue"
+    , Style.fontSize (Style.em 1.5)
+    , Style.marginTop (Style.em 1.5)
+    , Style.color "#025aa5"
+    , Style.fontFamily "sans-serif"
     ]
+
 
 menuContent : List Style.Style
 menuContent =
     [ Style.display Style.block
     , Style.textAlign "right"
     , Style.fontWeight "bold"
-    , Style.fontSize (Style.em 3)
+    , Style.fontSize (Style.em 2)
     , Style.lineHeight (Style.em 1)
     , Style.letterSpacing (Style.px 2)
+    , Style.fontFamily "sans-serif"
     ]
+
 
 gameColumn : List Style.Style
 gameColumn =
@@ -284,6 +289,42 @@ gameColumn =
     , Style.alignItems Style.left_
     , Style.marginLeft (Style.px menuWidth)
     ]
+
+
+endGameLabel : List Style.Style
+endGameLabel =
+    menuHeader
+
+
+endGameValue : List Style.Style
+endGameValue =
+    menuContent
+
+
+newGameOption : List Style.Style
+newGameOption =
+    [ Style.display "block"
+    , Style.lineHeight (Style.em 3)
+    , Style.fontSize (Style.em 1.2)
+    , Style.fontWeight "bold"
+    , Style.fontFamily "sans-serif"
+    , Style.color "#025aa5"
+    ]
+
+
+score : Model -> Int
+score model =
+    let
+        excessMoves =
+            max 0 (model.board.moves - model.board.minMoves)
+    in
+        (131 * model.board.size * model.board.moves // model.gameTime)
+            // (excessMoves + 1)
+
+
+scoreString : Model -> String
+scoreString model =
+    toString <| score model
 
 
 gameTimeString : Model -> String
@@ -328,20 +369,13 @@ boardSizeOptions model =
                 )
 
 
-checkbox : msg -> String -> Html msg
-checkbox msg name =
-    Html.label []
-        [ Html.input
-            [ Html.Attributes.type_ "checkbox"
-            , Html.Events.onClick msg
-            ]
-            []
-        , Html.text name
-        ]
-
-
-
--- TODO: Make this look better, calculate score
+endGameText : String -> String -> List (Html Msg)
+endGameText label value =
+    [ Html.span [ Html.Attributes.style endGameLabel ]
+        [ Html.text label ]
+    , Html.span [ Html.Attributes.style endGameValue ]
+        [ Html.text value ]
+    ]
 
 
 endGameModal : Model -> Html Msg
@@ -349,13 +383,13 @@ endGameModal model =
     Modal.config EndGameModalMsg
         |> Modal.h4 [] [ Html.text "You Win!" ]
         |> Modal.body []
-            [ Html.p [] [ Html.text <| "Moves: " ++ movesString model ]
-            , Html.p [] [ Html.text <| "Time: " ++ gameTimeString model ]
-            , Html.p [] [ Html.text "Score: 0" ]
+            [ Html.p [] <| endGameText "Moves" <| movesString model
+            , Html.p [] <| endGameText "Time" <| gameTimeString model
+            , Html.p [] <| endGameText "Score" <| scoreString model
             ]
         |> Modal.footer []
             [ Button.button
-                [ Button.attrs [ Html.Events.onClick NewGameMsg ] ]
+                [ Button.primary, Button.onClick NewGameMsg ]
                 [ Html.text "Restart" ]
             ]
         |> Modal.view model.endGameModalState
@@ -363,18 +397,33 @@ endGameModal model =
 
 newGameModal : Model -> Html Msg
 newGameModal model =
-    Modal.config NewGameModalMsg
-        |> Modal.h4 [] [ Html.text "Start New Game" ]
-        |> Modal.body []
-            [ Html.select [ Html.Events.onInput BoardSizeMsg ] (boardSizeOptions model)
-            , checkbox ToggleWrappingMsg "Wrapping"
+    let
+        body =
+            [ Html.span [ Html.Attributes.style newGameOption ]
+                [ Html.text "Board Size "
+                , Html.select [ Html.Events.onInput BoardSizeMsg ]
+                    (boardSizeOptions model)
+                ]
+            , Html.span [ Html.Attributes.style newGameOption ]
+                [ Html.text "Wrapping "
+                , Html.input
+                    [ Html.Attributes.type_ "checkbox"
+                    , Html.Events.onClick ToggleWrappingMsg
+                    ]
+                    []
+                ]
             ]
-        |> Modal.footer []
-            [ Button.button
-                [ Button.attrs [ Html.Events.onClick NewGameMsg ] ]
-                [ Html.text "Start" ]
-            ]
-        |> Modal.view model.newGameModalState
+    in
+        Modal.config NewGameModalMsg
+            |> Modal.small
+            |> Modal.h4 [] [ Html.text "Start New Game" ]
+            |> Modal.body [] body
+            |> Modal.footer []
+                [ Button.button
+                    [ Button.primary, Button.onClick NewGameMsg ]
+                    [ Html.text "Start" ]
+                ]
+            |> Modal.view model.newGameModalState
 
 
 lockButton : Model -> Html Msg
@@ -413,11 +462,11 @@ menu model =
                 , lockButton model
                 , Html.p [ Html.Attributes.style menuItem ]
                     [ Html.span [ Html.Attributes.style menuHeader ]
-                        [ Html.text "Moves" ]
+                        [ Html.text "moves" ]
                     , Html.span [ Html.Attributes.style menuContent ]
                         [ Html.text (movesString model) ]
                     , Html.span [ Html.Attributes.style menuHeader ]
-                        [Html.text "Time" ]
+                        [ Html.text "time" ]
                     , Html.span [ Html.Attributes.style menuContent ]
                         [ Html.text (gameTimeString model) ]
                     ]
@@ -438,7 +487,7 @@ view model =
                 |> Element.toHtml
     in
         Html.div [ Html.Attributes.style container ]
-            , menu model
+            [ menu model
             , Html.div [ Html.Attributes.style gameColumn ] [ render ]
             , newGameModal model
             , endGameModal model
