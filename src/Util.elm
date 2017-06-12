@@ -20,3 +20,13 @@ zipList a b =
 listProduct : List a -> List b -> List ( a, b )
 listProduct xs ys =
     List.concatMap (\x -> List.map (\y -> ( x, y )) ys) xs
+
+
+maybeCall : Maybe a -> b -> (a -> b) -> b
+maybeCall value default callback =
+    case value of
+        Just v ->
+            callback v
+
+        Nothing ->
+            default

@@ -1,14 +1,14 @@
 module Board
     exposing
         ( Board
+        , BoardState(..)
         , Tile
-        , TilePos
         , TileType(..)
-        , Rotation(..)
         , emptyBoard
         , generateBoard
         , rotateTile
         , lockTile
+        , setRenderSize
         , renderBoard
         )
 
@@ -18,6 +18,7 @@ import Set
 import Color
 import Collage
 import Random
+import Mouse
 import Util exposing (..)
 
 
@@ -34,6 +35,11 @@ type Direction
 type Rotation
     = RotateCW
     | RotateCCW
+
+
+type BoardState
+    = Complete
+    | Incomplete
 
 
 type alias TilePos =
@@ -71,6 +77,11 @@ type alias TileDict =
 type alias Board =
     { size : Int
     , tiles : TileDict
+    , state : BoardState
+    , moves : Int
+    , minMoves : Int
+    , lastMove : Maybe TilePos
+    , renderSize : Int
     }
 
 
@@ -89,11 +100,49 @@ getTile board pos =
 -- INPUT HANDLING
 
 
+{-| Determine which tile a click has hit.
+-}
+clickInfo : Mouse.Position -> Board -> Maybe ( TilePos, Rotation )
+clickInfo mousePos board =
+    let
+        size =
+            tileSizeInt board
+
+        tilePos =
+            ( mousePos.x // size, mousePos.y // size )
+
+        info =
+            case (mousePos.x // (size // 2)) % 2 of
+                0 ->
+                    ( tilePos, RotateCW )
+
+                _ ->
+                    ( tilePos, RotateCCW )
+
+        inBounds =
+            mousePos.x
+                > 0
+                && mousePos.y
+                > 0
+                && mousePos.x
+                < board.renderSize
+                && mousePos.y
+                < board.renderSize
+    in
+        if inBounds then
+            Just info
+        else
+            Nothing
+
+
 {-| Lock/Unlock the tile at the given board coordinates.
 -}
-lockTile : TilePos -> Board -> Board
-lockTile pos board =
+lockTile : Mouse.Position -> Board -> Board
+lockTile mousePos board =
     let
+        click =
+            clickInfo mousePos board
+
         lockFn =
             (\tile ->
                 case tile of
@@ -104,13 +153,19 @@ lockTile pos board =
                         Nothing
             )
     in
-        { board | tiles = Dict.update pos lockFn board.tiles }
+        case click of
+            Just ( pos, _ ) ->
+                { board | tiles = Dict.update pos lockFn board.tiles }
+
+            Nothing ->
+                board
 
 
-{-| Rotate the given tile, only if it is unlocked.
+{-| Rotate the given tile without a lock check - the caller must check whether
+the tile is locked.
 -}
-rotateWithLock : Rotation -> Maybe Tile -> Maybe Tile
-rotateWithLock dir tile =
+rotateUnlockedTile : Rotation -> Tile -> Tile
+rotateUnlockedTile dir tile =
     let
         rot =
             case dir of
@@ -120,30 +175,65 @@ rotateWithLock dir tile =
                 RotateCCW ->
                     -1
     in
-        case tile of
-            Just t ->
-                if not t.locked then
-                    Just { t | connections = rotateList rot t.connections }
-                else
-                    Just t
+        { tile | connections = rotateList rot tile.connections }
 
-            _ ->
-                tile
+
+{-| Update the number of moves the player has made for this board.
+-}
+updateMoves : Maybe Tile -> Board -> Board
+updateMoves tile board =
+    case ( tile, board.lastMove ) of
+        ( Just t, Just l ) ->
+            if ( t.x, t.y ) /= l then
+                { board
+                    | moves = board.moves + 1
+                    , lastMove = Just ( t.x, t.y )
+                }
+            else
+                board
+
+        ( Just t, Nothing ) ->
+            { board | moves = board.moves + 1, lastMove = Just ( t.x, t.y ) }
+
+        _ ->
+            board
 
 
 {-| Rotate the tlie at the given board coordinates in the given direction
 -}
-rotateTile : TilePos -> Rotation -> Board -> Board
-rotateTile pos dir board =
-    { board | tiles = Dict.update pos (rotateWithLock dir) board.tiles }
-        |> updateConnections
+rotateTile : Mouse.Position -> Board -> Board
+rotateTile mousePos board =
+    let
+        click =
+            clickInfo mousePos board
+
+        ( tile, pos, dir ) =
+            maybeCall click
+                ( Nothing, ( 0, 0 ), RotateCW )
+                (\( p, d ) -> ( getTile board p, p, d ))
+
+        move =
+            maybeCall tile False (\t -> not t.locked)
+
+        newTile =
+            maybeCall tile
+                errorTile
+                (\t -> rotateUnlockedTile dir t)
+    in
+        if move then
+            { board | tiles = Dict.insert pos newTile board.tiles }
+                |> updateMoves tile
+                |> updateConnections
+        else
+            board
 
 
 
 -- CONNECTION HANDLING
 
 
-{-| Recalculate which tiles are connected to the source
+{-| Recalculate which tiles are connected to the source. This also updates
+the board's state to indicate whether all tiles are connected or not.
 -}
 updateConnections : Board -> Board
 updateConnections board =
@@ -241,12 +331,7 @@ tileConnectedNeighbours tile board =
 -}
 markTileConnected : Maybe Tile -> Maybe Tile
 markTileConnected tile =
-    case tile of
-        Just t ->
-            Just { t | connected = True }
-
-        Nothing ->
-            Nothing
+    Maybe.map (\t -> { t | connected = True }) tile
 
 
 {-| Update the board to mark a given tile as connected.
@@ -290,7 +375,11 @@ updateVisited tile visited =
 {-| Recursive helper function used by updateConnection. Maintains a queue
 of tiles to visit next, and a set of tiles already visited.
 -}
-updateConnectionsHelper : List (Maybe Tile) -> Set.Set TilePos -> Board -> Board
+updateConnectionsHelper :
+    List (Maybe Tile)
+    -> Set.Set TilePos
+    -> Board
+    -> Board
 updateConnectionsHelper queue visited board =
     case queue of
         tile :: tiles ->
@@ -308,7 +397,20 @@ updateConnectionsHelper queue visited board =
                     |> updateConnectionsHelper (neighbours ++ tiles) newVisited
 
         [] ->
-            board
+            let
+                tileCount =
+                    board.size * board.size
+
+                visitedCount =
+                    Set.size visited
+
+                state =
+                    if tileCount == visitedCount then
+                        Complete
+                    else
+                        Incomplete
+            in
+                { board | state = state }
 
 
 {-| Get the 'source' tile for a given board
@@ -356,6 +458,13 @@ emptyTile size ( x, y ) =
         Tile x y tileType False falses falses False
 
 
+{-| A tile to use when failing to look up tiles from the board.
+-}
+errorTile : Tile
+errorTile =
+    emptyTile 0 ( 0, 0 )
+
+
 {-| Create tiles for an empty board.
 -}
 emptyBoardTiles : Int -> TileDict
@@ -371,29 +480,103 @@ emptyBoardTiles size =
 
 {-| Create an empty board of a given size.
 -}
-emptyBoard : Int -> Board
-emptyBoard size =
-    Board size (emptyBoardTiles size)
+emptyBoard : Int -> Int -> Board
+emptyBoard size renderSize =
+    Board size (emptyBoardTiles size) Incomplete 0 0 Nothing renderSize
+
+
+{-| Add an edge barrier to a tile if is along an edge.
+-}
+addWrap : Direction -> Int -> Tile -> Tile
+addWrap dir boardSize tile =
+    let
+        mergeBarriers =
+            (\b t -> List.map2 (||) b t.barriers)
+    in
+        case dir of
+            Up ->
+                if tile.y == 0 then
+                    { tile
+                        | barriers = mergeBarriers [ True, False, False, False ] tile
+                    }
+                else
+                    tile
+
+            Right ->
+                if tile.x == boardSize - 1 then
+                    { tile
+                        | barriers = mergeBarriers [ False, True, False, False ] tile
+                    }
+                else
+                    tile
+
+            Down ->
+                if tile.y == boardSize - 1 then
+                    { tile
+                        | barriers = mergeBarriers [ False, False, True, False ] tile
+                    }
+                else
+                    tile
+
+            Left ->
+                if tile.x == 0 then
+                    { tile
+                        | barriers = mergeBarriers [ False, False, False, True ] tile
+                    }
+                else
+                    tile
+
+
+{-| Generate an empty board with barriers around the edge.
+-}
+enclosedBoard : Int -> Int -> Board
+enclosedBoard size renderSize =
+    let
+        board =
+            emptyBoard size renderSize
+
+        updateFn dir pos tile =
+            addWrap dir size tile
+    in
+        { board
+            | tiles =
+                board.tiles
+                    |> Dict.map (updateFn Up)
+                    |> Dict.map (updateFn Right)
+                    |> Dict.map (updateFn Down)
+                    |> Dict.map (updateFn Left)
+        }
 
 
 {-| Get the number of edges of a tile that don't currently have a connection.
 -}
 remainingConnections : Board -> TilePos -> Int
 remainingConnections board pos =
-    case getTile board pos of
-        Just t ->
-            t.connections
-                |> List.map
-                    (\c ->
-                        if c then
-                            0
-                        else
-                            1
-                    )
-                |> List.sum
+    4 - (connectionCount board pos)
 
-        Nothing ->
-            0
+
+{-| Get the number of edges of a tile that have connections.
+-}
+connectionCount : Board -> TilePos -> Int
+connectionCount board pos =
+    let
+        tile =
+            getTile board pos
+
+        countFn =
+            (\t ->
+                t.connections
+                    |> List.map
+                        (\c ->
+                            if c then
+                                1
+                            else
+                                0
+                        )
+                    |> List.sum
+            )
+    in
+        maybeCall tile 0 countFn
 
 
 {-| Get a list of surrounding tiles which haven't yet been visisted (i.e.
@@ -402,18 +585,23 @@ that tile from the start location, is returned.
 -}
 availablePaths : Board -> TilePos -> List ( Direction, Tile )
 availablePaths board pos =
-    tileNeighbours (getTile board pos) board
-        |> List.map
-            (\tile ->
-                case tile of
-                    Just t ->
-                        t
+    let
+        tile =
+            getTile board pos
 
-                    Nothing ->
-                        emptyTile 0 ( 0, 0 )
+        barriers =
+            maybeCall tile [ False, False, False, False ] (\t -> t.barriers)
+
+        filterFn =
+            (\( d, b, t ) ->
+                (not b) && remainingConnections board ( t.x, t.y ) == 4
             )
-        |> zipList [ Up, Right, Down, Left ]
-        |> List.filter (\( d, t ) -> remainingConnections board ( t.x, t.y ) == 4)
+    in
+        tileNeighbours (getTile board pos) board
+            |> List.map (\tile -> Maybe.withDefault errorTile tile)
+            |> List.map3 (,,) [ Up, Right, Down, Left ] barriers
+            |> List.filter filterFn
+            |> List.map (\( d, _, t ) -> ( d, t ))
 
 
 {-| Make a connection from a given tile in a given direction.
@@ -467,8 +655,17 @@ makeNewConnection pos queue ( seed, board ) =
         pathCount =
             List.length paths
 
-        ( selected, newSeed ) =
+        ( selected, seed1 ) =
             Random.step (Random.int 1 (pathCount)) seed
+
+        branchChance =
+            0.3
+
+        gen =
+            Random.float 0 1 |> Random.map ((>) branchChance)
+
+        ( branch, newSeed ) =
+            Random.step gen seed
 
         path =
             List.drop (selected - 1) paths |> List.head
@@ -481,8 +678,14 @@ makeNewConnection pos queue ( seed, board ) =
                 let
                     newBoard =
                         connectTiles src dir dst board
+
+                    newQueue =
+                        if branch then
+                            pos :: ( dst.x, dst.y ) :: queue
+                        else
+                            ( dst.x, dst.y ) :: pos :: queue
                 in
-                    generateBoardHelper (( dst.x, dst.y ) :: pos :: queue) ( newSeed, newBoard )
+                    generateBoardHelper newQueue ( newSeed, newBoard )
 
             _ ->
                 generateBoardHelper queue ( newSeed, board )
@@ -500,7 +703,7 @@ generateBoardHelper queue ( seed, board ) =
                 pathCount =
                     List.length (availablePaths board q)
             in
-                if remainingConnections board q <= 1 || pathCount == 0 then
+                if connectionCount board q >= 3 || pathCount == 0 then
                     generateBoardHelper qs ( seed, board )
                 else
                     makeNewConnection q qs ( seed, board )
@@ -512,23 +715,9 @@ generateBoardHelper queue ( seed, board ) =
 {-| Place a single barrier on the given side of a given tile, only if a
 connection isn't needed through that edge.
 -}
-placeBarrier : Tile -> Direction -> Bool -> Board -> Board
-placeBarrier tile dir value board =
+placeBarrier : Tile -> List Bool -> Board -> Board
+placeBarrier tile merge board =
     let
-        merge =
-            case dir of
-                Up ->
-                    [ value, False, False, False ]
-
-                Right ->
-                    [ False, value, False, False ]
-
-                Down ->
-                    [ False, False, value, False ]
-
-                Left ->
-                    [ False, False, False, value ]
-
         barriers =
             List.map3 (\bar mer con -> (bar || mer) && not con)
                 tile.barriers
@@ -545,7 +734,7 @@ placeBarrier tile dir value board =
 neighbouring tiles with the barriers.
 -}
 placeTileBarriers : ( TilePos, ( Bool, Bool ) ) -> Board -> Board
-placeTileBarriers ( pos, ( vert, horiz ) ) board =
+placeTileBarriers ( pos, ( horiz, vert ) ) board =
     let
         tile =
             getTile board pos
@@ -556,10 +745,9 @@ placeTileBarriers ( pos, ( vert, horiz ) ) board =
         case ( tile, neighbours ) of
             ( Just t, [ Just up, Just right, _, _ ] ) ->
                 board
-                    |> placeBarrier t Up vert
-                    |> placeBarrier t Right horiz
-                    |> placeBarrier up Down vert
-                    |> placeBarrier right Left horiz
+                    |> placeBarrier t [ horiz, vert, False, False ]
+                    |> placeBarrier up [ False, False, horiz, False ]
+                    |> placeBarrier right [ False, False, False, vert ]
 
             _ ->
                 board
@@ -601,6 +789,36 @@ placeBarriers ( seed, board ) =
         )
 
 
+{-| Calculate the minimum number of moves to complete the board. Note this
+assumes that the board has a unique solution, which isn't necessarily true,
+so there may be cases where this minimum isn't the true minimum.
+-}
+minMoves : TileDict -> TileDict -> Int
+minMoves original shuffled =
+    let
+        toConnections =
+            (\dictEntry -> .connections <| Tuple.second dictEntry)
+
+        origConnections =
+            List.map toConnections <| Dict.toList original
+
+        shuffledConnections =
+            List.map toConnections <| Dict.toList shuffled
+
+        changes =
+            List.map2
+                (\o s ->
+                    if o == s then
+                        0
+                    else
+                        1
+                )
+                origConnections
+                shuffledConnections
+    in
+        List.sum changes
+
+
 {-| Randomly rotate tiles in a generated board.
 -}
 shuffleBoard : ( Random.Seed, Board ) -> Board
@@ -628,17 +846,24 @@ shuffleBoard ( seed, board ) =
                 )
                 tiles
                 rotates
+                |> Dict.fromList
     in
-        { board | tiles = (Dict.fromList newTiles) }
+        { board
+            | tiles = newTiles
+            , minMoves = minMoves board.tiles newTiles
+        }
 
 
 {-| Generate a new board layout of a given size.
 -}
-generateBoard : Int -> Random.Seed -> Board
-generateBoard size seed =
+generateBoard : Int -> Int -> Random.Seed -> Bool -> Board
+generateBoard size renderSize seed enclosed =
     let
         board =
-            emptyBoard size
+            if enclosed then
+                enclosedBoard size renderSize
+            else
+                emptyBoard size renderSize
 
         mid =
             size // 2
@@ -654,39 +879,50 @@ generateBoard size seed =
 
 
 -- BOARD RENDERING
--- TODO: Derive these from collage width and height
 
 
-tileSize =
-    64
+tileSizeInt : Board -> Int
+tileSizeInt board =
+    board.renderSize // board.size
 
 
-lineWidth =
-    4
+tileSizeFloat : Board -> Float
+tileSizeFloat board =
+    toFloat (tileSizeInt board)
 
 
-collageTop =
-    300
+lineWidth : Board -> Float
+lineWidth board =
+    tileSizeFloat board / 12
 
 
-collageLeft =
-    -300
+collageTop : Board -> Int
+collageTop board =
+    board.renderSize // 2
 
 
-tileCoordsToCollagePosition : TilePos -> ( Float, Float )
-tileCoordsToCollagePosition ( tileX, tileY ) =
+collageLeft : Board -> Int
+collageLeft board =
+    -board.renderSize // 2
+
+
+tileCoordsToCollagePosition : TilePos -> Board -> ( Float, Float )
+tileCoordsToCollagePosition ( tileX, tileY ) board =
     let
+        size =
+            tileSizeInt board
+
         top =
-            collageTop - tileY * tileSize
+            (collageTop board) - tileY * size
 
         left =
-            collageLeft + tileX * tileSize
+            (collageLeft board) + tileX * size
 
         centerY =
-            top - tileSize // 2
+            top - size // 2
 
         centerX =
-            left + tileSize // 2
+            left + size // 2
     in
         ( toFloat (centerX), toFloat (centerY) )
 
@@ -699,48 +935,70 @@ connectionColor tile =
         Color.white
 
 
-renderConnection : Tile -> ( Float, Float ) -> Float -> Collage.Form
-renderConnection tile translation rotation =
+renderConnection : Board -> Tile -> ( Float, Float ) -> Float -> Collage.Form
+renderConnection board tile translation rotation =
     let
+        size =
+            tileSizeFloat board / 2
+
         color =
             connectionColor tile
 
+        width =
+            lineWidth board
+
         form =
-            Collage.filled color (Collage.rect lineWidth (tileSize / 2))
+            Collage.filled color (Collage.rect width size)
     in
         form
             |> Collage.move translation
             |> Collage.rotate (degrees rotation)
 
 
-renderUpConnection : Tile -> Collage.Form
-renderUpConnection tile =
-    renderConnection tile ( 0, tileSize / 4 ) 0
+renderUpConnection : Board -> Tile -> Collage.Form
+renderUpConnection board tile =
+    let
+        translate =
+            ( 0, tileSizeFloat board / 4 )
+    in
+        renderConnection board tile translate 0
 
 
-renderRightConnection : Tile -> Collage.Form
-renderRightConnection tile =
-    renderConnection tile ( tileSize / 4, 0 ) 90
+renderRightConnection : Board -> Tile -> Collage.Form
+renderRightConnection board tile =
+    let
+        translate =
+            ( tileSizeFloat board / 4, 0 )
+    in
+        renderConnection board tile translate 90
 
 
-renderDownConnection : Tile -> Collage.Form
-renderDownConnection tile =
-    renderConnection tile ( 0, -tileSize / 4 ) 0
+renderDownConnection : Board -> Tile -> Collage.Form
+renderDownConnection board tile =
+    let
+        translate =
+            ( 0, -(tileSizeFloat board) / 4 )
+    in
+        renderConnection board tile translate 0
 
 
-renderLeftConnection : Tile -> Collage.Form
-renderLeftConnection tile =
-    renderConnection tile ( -tileSize / 4, 0 ) 90
+renderLeftConnection : Board -> Tile -> Collage.Form
+renderLeftConnection board tile =
+    let
+        translate =
+            ( -(tileSizeFloat board) / 4, 0 )
+    in
+        renderConnection board tile translate 90
 
 
-renderConnections : Tile -> List Collage.Form
-renderConnections tile =
+renderConnections : Board -> Tile -> List Collage.Form
+renderConnections board tile =
     let
         renderFns =
-            [ renderUpConnection
-            , renderRightConnection
-            , renderDownConnection
-            , renderLeftConnection
+            [ renderUpConnection board
+            , renderRightConnection board
+            , renderDownConnection board
+            , renderLeftConnection board
             ]
     in
         zipList renderFns tile.connections
@@ -748,63 +1006,75 @@ renderConnections tile =
             |> List.map (\( r, c ) -> r tile)
 
 
-renderForeground : Tile -> List Collage.Form
-renderForeground tile =
-    case tile.tileType of
-        Source ->
-            [ Collage.filled Color.grey (Collage.square (tileSize / 1.5)) ]
+renderForeground : Board -> Tile -> List Collage.Form
+renderForeground board tile =
+    let
+        size =
+            tileSizeFloat board
+    in
+        case tile.tileType of
+            Source ->
+                [ Collage.filled Color.grey (Collage.square (size / 1.5))
+                ]
 
-        Normal ->
-            let
-                conCount =
-                    tile.connections
-                        |> List.map
-                            (\c ->
-                                if c then
-                                    1
-                                else
-                                    0
-                            )
-                        |> List.sum
-            in
-                if conCount == 1 then
-                    [ Collage.filled (connectionColor tile) (Collage.circle (tileSize / 4)) ]
-                else
-                    []
+            Normal ->
+                let
+                    conCount =
+                        tile.connections
+                            |> List.map
+                                (\c ->
+                                    if c then
+                                        1
+                                    else
+                                        0
+                                )
+                            |> List.sum
+                in
+                    if conCount == 1 then
+                        [ Collage.filled (connectionColor tile)
+                            (Collage.circle (size / 4))
+                        ]
+                    else
+                        []
 
 
-renderBackground : Tile -> List Collage.Form
-renderBackground tile =
-    [ Collage.filled Color.black (Collage.square tileSize)
-    , Collage.filled Color.blue (Collage.square (tileSize * 0.99))
-    ]
+renderBackground : Board -> Tile -> List Collage.Form
+renderBackground board tile =
+    let
+        size =
+            tileSizeFloat board
+    in
+        [ Collage.filled Color.black (Collage.square size)
+        , Collage.filled Color.blue (Collage.square (size * 0.99))
+        ]
 
 
-renderLock : Collage.Form
-renderLock =
-    Collage.square tileSize
+renderLock : Board -> Collage.Form
+renderLock board =
+    Collage.square (tileSizeFloat board)
         |> Collage.filled Color.purple
         |> Collage.alpha 0.5
 
 
+setRenderSize : Board -> Int -> Board
+setRenderSize board size =
+    { board | renderSize = size }
 
--- TODO: Can probably tidy the group/list handling up
 
-
-renderTile : ( TilePos, Tile ) -> Collage.Form
-renderTile ( pos, tile ) =
+renderTile : Board -> ( TilePos, Tile ) -> Collage.Form
+renderTile board ( pos, tile ) =
     let
         background =
-            renderBackground tile
+            renderBackground board tile
 
         connections =
-            renderConnections tile
+            renderConnections board tile
 
         barriers =
-            renderBarriers ( pos, tile )
+            renderBarriers board ( pos, tile )
 
         foreground =
-            renderForeground tile
+            renderForeground board tile
 
         group =
             if tile.locked then
@@ -812,41 +1082,74 @@ renderTile ( pos, tile ) =
                     (background
                         ++ connections
                         ++ foreground
-                        ++ [ renderLock ]
+                        ++ [ renderLock board ]
                     )
             else
                 Collage.group (background ++ connections ++ foreground)
 
         move =
-            Collage.move (tileCoordsToCollagePosition pos)
+            Collage.move (tileCoordsToCollagePosition pos board)
     in
         move group
 
 
-barrierRenderFunctions : List Collage.Form
-barrierRenderFunctions =
+barrierRenderFunctions : Board -> TilePos -> List Collage.Form
+barrierRenderFunctions board pos =
     let
+        size =
+            tileSizeFloat board
+
+        width =
+            1.4 * lineWidth board
+
         line =
-            Collage.filled Color.darkBlue (Collage.rect (lineWidth * 2) tileSize)
+            Collage.filled Color.darkPurple (Collage.rect width size)
+
+        edgeTranslate =
+            size / 2 - width / 2 + 1
+
+        upFn =
+            if Tuple.second pos == 0 then
+                Collage.move ( 0, edgeTranslate )
+                    (Collage.rotate (degrees 90) line)
+            else
+                Collage.move ( 0, size / 2 )
+                    (Collage.rotate (degrees 90) line)
+
+        rightFn =
+            if Tuple.first pos == board.size - 1 then
+                Collage.move ( edgeTranslate, 0 ) line
+            else
+                Collage.move ( size / 2, 0 ) line
+
+        downFn =
+            if Tuple.second pos == board.size - 1 then
+                Collage.move ( 0, -edgeTranslate )
+                    (Collage.rotate (degrees 90) line)
+            else
+                Collage.move ( 0, -size / 2 )
+                    (Collage.rotate (degrees 90) line)
+
+        leftFn =
+            if Tuple.first pos == 0 then
+                Collage.move ( -edgeTranslate, 0 ) line
+            else
+                Collage.move ( -size / 2, 0 ) line
     in
-        [ Collage.move ( 0, tileSize / 2 ) (Collage.rotate (degrees 90) line)
-        , Collage.move ( tileSize / 2, 0 ) line
-        , Collage.move ( 0, -tileSize / 2 ) (Collage.rotate (degrees 90) line)
-        , Collage.move ( -tileSize / 2, 0 ) line
-        ]
+        [ upFn, rightFn, downFn, leftFn ]
 
 
-renderBarriers : ( TilePos, Tile ) -> Collage.Form
-renderBarriers ( pos, tile ) =
+renderBarriers : Board -> ( TilePos, Tile ) -> Collage.Form
+renderBarriers board ( pos, tile ) =
     let
         zipped =
-            List.map2 (,) tile.barriers barrierRenderFunctions
+            List.map2 (,) tile.barriers (barrierRenderFunctions board pos)
 
         filtered =
             List.map Tuple.second (List.filter Tuple.first zipped)
 
         move =
-            Collage.move (tileCoordsToCollagePosition pos)
+            Collage.move (tileCoordsToCollagePosition pos board)
 
         group =
             Collage.group filtered
@@ -861,9 +1164,9 @@ renderBoard board =
             Dict.toList board.tiles
 
         tileRenders =
-            List.map renderTile tiles
+            List.map (renderTile board) tiles
 
         barrierRenders =
-            List.map renderBarriers tiles
+            List.map (renderBarriers board) tiles
     in
         tileRenders ++ barrierRenders
