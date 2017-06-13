@@ -6,6 +6,7 @@
 
 The aim of the game is to connect all of the "network elements" to the "source" in the center of the board. This is achieved by clicking on individual tiles to rotate them; clicking on the right hand side of a tile rotates it clockwise, and vice versa.
 
-Your score is based on how quickly you complete the game, and in how many moves - you will be penalized for taking more moves than the minimum required. Note that a "move" is counted every time you rotate a different tile: multiple consecutive rotations of a single tile will only count as one move, whereas moving a tile, moving another tile, and then moving the initial tile again will count as 3 moves.
+Your score is based on how quickly you complete the game, and in how many moves - you will be penalized for taking more moves than the minimum required. Note that a "move" is counted every time you rotate a different tile: multiple consecutive rotations of a single tile will only count as one move, whereas moving a tile, moving another tile, and then moving the initial tile again will count as 3 moves. Higher scores are awarded for completing larger boards. For even more of a challenge, you can play in "wrapping" mode, where the board wraps around the edges.
 
 To help you remember which tiles have already been rotated into position, it is possible to lock a tile to prevent it being rotated. To switch between "locking" and "rotating" modes, you can either press the "toggle locking" button on the left hand side of the board, or use the "L" key on the keyboard.
+
