@@ -471,6 +471,11 @@ boardClickDecoder =
         (Decode.field "offsetY" Decode.int)
 
 
+lockCursor : String
+lockCursor =
+    "url(\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><text y='20' font-size='20'>🔒</text></svg>\") 12 12, auto"
+
+
 view : Model -> Html Msg
 view model =
     let
@@ -479,11 +484,18 @@ view model =
 
         render =
             Board.renderBoard board
+
+        cursorStyle =
+            if model.mode /= Init && model.locking then
+                [ Html.Attributes.style "cursor" lockCursor ]
+
+            else
+                []
     in
     Html.div []
         [ menu model
         , Html.div
-            (Html.Events.on "click" boardClickDecoder :: gameColumn)
+            (Html.Events.on "click" boardClickDecoder :: cursorStyle ++ gameColumn)
             [ render ]
         , newGameModal model
         , endGameModal model
