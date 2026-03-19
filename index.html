@@ -10,9 +10,10 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ" crossorigin="anonymous">
   </head>
   <body>
+    <div id="elm-app"></div>
     <script src="elm-net.js"></script>
     <script type="text/javascript">
-        Elm.Net.fullscreen();
+        Elm.Net.init({ node: document.getElementById("elm-app") });
     </script>
   </body>
 </html>
