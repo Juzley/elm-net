@@ -1,25 +1,22 @@
 module Net exposing (..)
 
-import Style
-import Html exposing (..)
-import Html.Events
-import Html.Attributes
-import Collage
-import Element
-import Mouse
 import Board
+import Browser
+import Browser.Dom
+import Browser.Events
+import Html exposing (..)
+import Html.Attributes
+import Html.Events
+import Json.Decode as Decode
 import Random
 import Task
 import Time
-import Keyboard
-import Char
-import Window
 import Bootstrap.Modal as Modal
 import Bootstrap.Button as Button
 
 
 main =
-    Html.program
+    Browser.element
         { init = init
         , view = view
         , update = update
@@ -41,6 +38,10 @@ type GameMode
     | GameOver
 
 
+type alias WindowSize =
+    { width : Int, height : Int }
+
+
 type alias Model =
     { mode : GameMode
     , board : Board.Board
@@ -48,23 +49,30 @@ type alias Model =
     , gameTime : Int
     , newBoardSize : Int
     , newBoardWrapping : Bool
-    , endGameModalState : Modal.State
-    , newGameModalState : Modal.State
+    , endGameModalState : Modal.Visibility
+    , newGameModalState : Modal.Visibility
     }
 
 
-init : ( Model, Cmd Msg )
-init =
+init : () -> ( Model, Cmd Msg )
+init _ =
     ( { mode = Init
       , board = Board.emptyBoard defaultBoardSize 600
       , locking = False
       , gameTime = 0
       , newBoardSize = defaultBoardSize
       , newBoardWrapping = False
-      , endGameModalState = Modal.hiddenState
-      , newGameModalState = Modal.hiddenState
+      , endGameModalState = Modal.hidden
+      , newGameModalState = Modal.hidden
       }
-    , Task.perform WindowSizeMsg Window.size
+    , Task.perform
+        (\vp ->
+            WindowSizeMsg
+                { width = round vp.scene.width
+                , height = round vp.scene.height
+                }
+        )
+        Browser.Dom.getViewport
     )
 
 
@@ -73,17 +81,18 @@ init =
 
 
 type Msg
-    = MouseMsg Mouse.Position
-    | KeyboardMsg Keyboard.KeyCode
+    = BoardClickMsg Int Int
+    | KeyboardMsg String
     | ToggleLockMsg
     | NewGameMsg
-    | NewBoardMsg Time.Time
-    | WindowSizeMsg Window.Size
-    | TickMsg Time.Time
+    | NewBoardMsg Time.Posix
+    | WindowSizeMsg WindowSize
+    | TickMsg Time.Posix
     | BoardSizeMsg String
     | ToggleWrappingMsg
-    | EndGameModalMsg Modal.State
-    | NewGameModalMsg Modal.State
+    | CloseEndGameModal
+    | CloseNewGameModal
+    | ShowNewGameModal
 
 
 toggleLock : Model -> ( Model, Cmd Msg )
@@ -94,39 +103,37 @@ toggleLock model =
 playingUpdate : Msg -> Model -> ( Model, Cmd Msg )
 playingUpdate msg model =
     case msg of
-        MouseMsg mousePos ->
+        BoardClickMsg mouseX mouseY ->
             let
                 adjusted =
-                    { mousePos | x = mousePos.x - menuWidth }
+                    { x = mouseX, y = mouseY }
 
                 newBoard =
                     if model.locking then
                         Board.lockTile adjusted model.board
+
                     else
                         Board.rotateTile adjusted model.board
-
-                mode =
-                    if newBoard.state == Board.Complete then
-                        GameOver
-                    else
-                        Playing
             in
-                case newBoard.state of
-                    Board.Complete ->
-                        ( { model
-                            | board = newBoard
-                            , mode = GameOver
-                            , endGameModalState = Modal.visibleState
-                          }
-                        , Cmd.none
-                        )
+            case newBoard.state of
+                Board.Complete ->
+                    ( { model
+                        | board = newBoard
+                        , mode = GameOver
+                        , endGameModalState = Modal.shown
+                      }
+                    , Cmd.none
+                    )
 
-                    _ ->
-                        ( { model | board = newBoard }, Cmd.none )
+                _ ->
+                    ( { model | board = newBoard }, Cmd.none )
 
-        KeyboardMsg keyCode ->
-            case Char.fromCode keyCode of
-                'L' ->
+        KeyboardMsg key ->
+            case key of
+                "l" ->
+                    toggleLock model
+
+                "L" ->
                     toggleLock model
 
                 _ ->
@@ -135,7 +142,7 @@ playingUpdate msg model =
         ToggleLockMsg ->
             toggleLock model
 
-        TickMsg time ->
+        TickMsg _ ->
             ( { model | gameTime = model.gameTime + 1 }, Cmd.none )
 
         _ ->
@@ -147,8 +154,8 @@ update msg model =
     case msg of
         NewGameMsg ->
             ( { model
-                | endGameModalState = Modal.hiddenState
-                , newGameModalState = Modal.hiddenState
+                | endGameModalState = Modal.hidden
+                , newGameModalState = Modal.hidden
               }
             , Task.perform NewBoardMsg Time.now
             )
@@ -158,12 +165,12 @@ update msg model =
                 newBoard =
                     Board.setRenderSize model.board (boardRenderSize size)
             in
-                ( { model | board = newBoard }, Cmd.none )
+            ( { model | board = newBoard }, Cmd.none )
 
         NewBoardMsg time ->
             let
                 seed =
-                    Random.initialSeed (round time)
+                    Random.initialSeed (Time.posixToMillis time)
 
                 newBoard =
                     Board.generateBoard model.newBoardSize
@@ -171,22 +178,20 @@ update msg model =
                         seed
                         (not model.newBoardWrapping)
             in
-                ( { model
-                    | mode = Playing
-                    , locking = False
-                    , board = newBoard
-                    , gameTime = 0
-                  }
-                , Cmd.none
-                )
+            ( { model
+                | mode = Playing
+                , locking = False
+                , board = newBoard
+                , gameTime = 0
+              }
+            , Cmd.none
+            )
 
         BoardSizeMsg sizeString ->
             ( { model
                 | newBoardSize =
-                    Result.withDefault defaultBoardSize
-                        (String.toInt
-                            sizeString
-                        )
+                    Maybe.withDefault defaultBoardSize
+                        (String.toInt sizeString)
               }
             , Cmd.none
             )
@@ -196,11 +201,14 @@ update msg model =
             , Cmd.none
             )
 
-        EndGameModalMsg state ->
-            ( { model | endGameModalState = state }, Cmd.none )
+        CloseEndGameModal ->
+            ( { model | endGameModalState = Modal.hidden }, Cmd.none )
 
-        NewGameModalMsg state ->
-            ( { model | newGameModalState = state }, Cmd.none )
+        CloseNewGameModal ->
+            ( { model | newGameModalState = Modal.hidden }, Cmd.none )
+
+        ShowNewGameModal ->
+            ( { model | newGameModalState = Modal.shown }, Cmd.none )
 
         _ ->
             case model.mode of
@@ -218,12 +226,14 @@ update msg model =
 -- Subscriptions
 
 
-subscriptions model =
+subscriptions : Model -> Sub Msg
+subscriptions _ =
     Sub.batch
-        [ Mouse.clicks MouseMsg
-        , Keyboard.downs KeyboardMsg
-        , Window.resizes WindowSizeMsg
-        , Time.every Time.second TickMsg
+        [ Browser.Events.onKeyDown
+            (Decode.field "key" Decode.string |> Decode.map KeyboardMsg)
+        , Browser.Events.onResize
+            (\w h -> WindowSizeMsg { width = w, height = h })
+        , Time.every 1000 TickMsg
         ]
 
 
@@ -231,7 +241,7 @@ subscriptions model =
 -- View
 
 
-boardRenderSize : Window.Size -> Int
+boardRenderSize : WindowSize -> Int
 boardRenderSize size =
     min (size.width - menuWidth) size.height
 
@@ -241,73 +251,52 @@ menuWidth =
     200
 
 
-container : List Style.Style
-container =
-    []
-
-
-menuColumn : List Style.Style
+menuColumn : List (Html.Attribute msg)
 menuColumn =
-    [ Style.width (Style.px menuWidth)
-    , Style.padding (Style.px 10)
-    , Style.float Style.left_
+    [ Html.Attributes.style "width" (String.fromInt menuWidth ++ "px")
+    , Html.Attributes.style "padding" "10px"
+    , Html.Attributes.style "float" "left"
     ]
 
 
-menuItem : List Style.Style
-menuItem =
-    []
-
-
-menuHeader : List Style.Style
+menuHeader : List (Html.Attribute msg)
 menuHeader =
-    [ Style.display Style.block
-    , Style.fontWeight "bold"
-    , Style.fontVariant Style.smallCaps
-    , Style.fontSize (Style.em 1.5)
-    , Style.marginTop (Style.em 1.5)
-    , Style.color "#025aa5"
-    , Style.fontFamily "sans-serif"
+    [ Html.Attributes.style "display" "block"
+    , Html.Attributes.style "font-weight" "bold"
+    , Html.Attributes.style "font-variant" "small-caps"
+    , Html.Attributes.style "font-size" "1.5em"
+    , Html.Attributes.style "margin-top" "1.5em"
+    , Html.Attributes.style "color" "#025aa5"
+    , Html.Attributes.style "font-family" "sans-serif"
     ]
 
 
-menuContent : List Style.Style
+menuContent : List (Html.Attribute msg)
 menuContent =
-    [ Style.display Style.block
-    , Style.textAlign "right"
-    , Style.fontWeight "bold"
-    , Style.fontSize (Style.em 2)
-    , Style.lineHeight (Style.em 1)
-    , Style.letterSpacing (Style.px 2)
-    , Style.fontFamily "sans-serif"
+    [ Html.Attributes.style "display" "block"
+    , Html.Attributes.style "text-align" "right"
+    , Html.Attributes.style "font-weight" "bold"
+    , Html.Attributes.style "font-size" "2em"
+    , Html.Attributes.style "line-height" "1em"
+    , Html.Attributes.style "letter-spacing" "2px"
+    , Html.Attributes.style "font-family" "sans-serif"
     ]
 
 
-gameColumn : List Style.Style
+gameColumn : List (Html.Attribute Msg)
 gameColumn =
-    [ Style.width Style.auto
-    , Style.alignItems Style.left_
-    , Style.marginLeft (Style.px menuWidth)
+    [ Html.Attributes.style "width" "auto"
+    , Html.Attributes.style "margin-left" (String.fromInt menuWidth ++ "px")
     ]
 
 
-endGameLabel : List Style.Style
-endGameLabel =
-    menuHeader
-
-
-endGameValue : List Style.Style
-endGameValue =
-    menuContent
-
-
-newGameOption : List Style.Style
+newGameOption : List (Html.Attribute msg)
 newGameOption =
-    [ Style.display "block"
-    , Style.lineHeight (Style.em 3)
-    , Style.fontSize (Style.em 1.2)
-    , Style.fontWeight "bold"
-    , Style.fontFamily "sans-serif"
+    [ Html.Attributes.style "display" "block"
+    , Html.Attributes.style "line-height" "3em"
+    , Html.Attributes.style "font-size" "1.2em"
+    , Html.Attributes.style "font-weight" "bold"
+    , Html.Attributes.style "font-family" "sans-serif"
     ]
 
 
@@ -317,13 +306,13 @@ score model =
         excessMoves =
             max 0 (model.board.moves - model.board.minMoves)
     in
-        (131 * model.board.size * model.board.moves // model.gameTime)
-            // (excessMoves + 1)
+    (131 * model.board.size * model.board.moves // model.gameTime)
+        // (excessMoves + 1)
 
 
 scoreString : Model -> String
 scoreString model =
-    toString <| score model
+    String.fromInt (score model)
 
 
 gameTimeString : Model -> String
@@ -333,18 +322,18 @@ gameTimeString model =
             model.gameTime // 60
 
         seconds =
-            rem model.gameTime 60
+            remainderBy 60 model.gameTime
     in
-        [ minutes, seconds ]
-            |> List.map toString
-            |> List.map (String.pad 2 '0')
-            |> String.join ":"
+    [ minutes, seconds ]
+        |> List.map String.fromInt
+        |> List.map (String.padLeft 2 '0')
+        |> String.join ":"
 
 
 movesString : Model -> String
 movesString model =
     [ model.board.moves, model.board.minMoves ]
-        |> List.map toString
+        |> List.map String.fromInt
         |> String.join "/"
 
 
@@ -354,37 +343,36 @@ boardSizeOptions model =
         extraAttrs n =
             if n == model.newBoardSize then
                 [ Html.Attributes.selected True ]
+
             else
                 []
 
         attrs n =
-            (Html.Attributes.value (toString n)) :: (extraAttrs n)
+            Html.Attributes.value (String.fromInt n) :: extraAttrs n
     in
-        List.range 3 13
-            |> List.filter (\n -> n % 2 == 1)
-            |> List.map
-                (\n ->
-                    Html.option (attrs n) [ Html.text (toString n) ]
-                )
+    List.range 3 13
+        |> List.filter (\n -> modBy 2 n == 1)
+        |> List.map
+            (\n ->
+                Html.option (attrs n) [ Html.text (String.fromInt n) ]
+            )
 
 
 endGameText : String -> String -> List (Html Msg)
 endGameText label value =
-    [ Html.span [ Html.Attributes.style endGameLabel ]
-        [ Html.text label ]
-    , Html.span [ Html.Attributes.style endGameValue ]
-        [ Html.text value ]
+    [ Html.span menuHeader [ Html.text label ]
+    , Html.span menuContent [ Html.text value ]
     ]
 
 
 endGameModal : Model -> Html Msg
 endGameModal model =
-    Modal.config EndGameModalMsg
+    Modal.config CloseEndGameModal
         |> Modal.h4 [] [ Html.text "You Win!" ]
         |> Modal.body []
-            [ Html.p [] <| endGameText "Moves" <| movesString model
-            , Html.p [] <| endGameText "Time" <| gameTimeString model
-            , Html.p [] <| endGameText "Score" <| scoreString model
+            [ Html.p [] (endGameText "Moves" (movesString model))
+            , Html.p [] (endGameText "Time" (gameTimeString model))
+            , Html.p [] (endGameText "Score" (scoreString model))
             ]
         |> Modal.footer []
             [ Button.button
@@ -398,12 +386,12 @@ newGameModal : Model -> Html Msg
 newGameModal model =
     let
         body =
-            [ Html.span [ Html.Attributes.style newGameOption ]
+            [ Html.span newGameOption
                 [ Html.text "Board Size "
                 , Html.select [ Html.Events.onInput BoardSizeMsg ]
                     (boardSizeOptions model)
                 ]
-            , Html.span [ Html.Attributes.style newGameOption ]
+            , Html.span newGameOption
                 [ Html.text "Wrapping "
                 , Html.input
                     [ Html.Attributes.type_ "checkbox"
@@ -413,16 +401,16 @@ newGameModal model =
                 ]
             ]
     in
-        Modal.config NewGameModalMsg
-            |> Modal.small
-            |> Modal.h4 [] [ Html.text "Start New Game" ]
-            |> Modal.body [] body
-            |> Modal.footer []
-                [ Button.button
-                    [ Button.primary, Button.onClick NewGameMsg ]
-                    [ Html.text "Start" ]
-                ]
-            |> Modal.view model.newGameModalState
+    Modal.config CloseNewGameModal
+        |> Modal.small
+        |> Modal.h4 [] [ Html.text "Start New Game" ]
+        |> Modal.body [] body
+        |> Modal.footer []
+            [ Button.button
+                [ Button.primary, Button.onClick NewGameMsg ]
+                [ Html.text "Start" ]
+            ]
+        |> Modal.view model.newGameModalState
 
 
 lockButton : Model -> Html Msg
@@ -431,12 +419,13 @@ lockButton model =
         attrs =
             if model.locking then
                 Button.attrs [ Html.Attributes.class "active" ]
+
             else
                 Button.attrs []
     in
-        Button.button
-            [ attrs, Button.primary, Button.block, Button.onClick ToggleLockMsg ]
-            [ Html.text "Toggle Lock" ]
+    Button.button
+        [ attrs, Button.primary, Button.block, Button.onClick ToggleLockMsg ]
+        [ Html.text "Toggle Lock" ]
 
 
 newGameButton : Html Msg
@@ -444,7 +433,7 @@ newGameButton =
     Button.button
         [ Button.primary
         , Button.block
-        , Button.onClick (NewGameModalMsg Modal.visibleState)
+        , Button.onClick ShowNewGameModal
         ]
         [ Html.text "New Game" ]
 
@@ -455,23 +444,31 @@ menu model =
         contents =
             if model.mode == Init then
                 [ newGameButton ]
+
             else
                 [ newGameButton
                 , Html.hr [] []
                 , lockButton model
-                , Html.p [ Html.Attributes.style menuItem ]
-                    [ Html.span [ Html.Attributes.style menuHeader ]
+                , Html.p []
+                    [ Html.span menuHeader
                         [ Html.text "moves" ]
-                    , Html.span [ Html.Attributes.style menuContent ]
+                    , Html.span menuContent
                         [ Html.text (movesString model) ]
-                    , Html.span [ Html.Attributes.style menuHeader ]
+                    , Html.span menuHeader
                         [ Html.text "time" ]
-                    , Html.span [ Html.Attributes.style menuContent ]
+                    , Html.span menuContent
                         [ Html.text (gameTimeString model) ]
                     ]
                 ]
     in
-        Html.div [ Html.Attributes.style menuColumn ] contents
+    Html.div menuColumn contents
+
+
+boardClickDecoder : Decode.Decoder Msg
+boardClickDecoder =
+    Decode.map2 BoardClickMsg
+        (Decode.field "offsetX" Decode.int)
+        (Decode.field "offsetY" Decode.int)
 
 
 view : Model -> Html Msg
@@ -482,12 +479,12 @@ view model =
 
         render =
             Board.renderBoard board
-                |> Collage.collage board.renderSize board.renderSize
-                |> Element.toHtml
     in
-        Html.div [ Html.Attributes.style container ]
-            [ menu model
-            , Html.div [ Html.Attributes.style gameColumn ] [ render ]
-            , newGameModal model
-            , endGameModal model
-            ]
+    Html.div []
+        [ menu model
+        , Html.div
+            (Html.Events.on "click" boardClickDecoder :: gameColumn)
+            [ render ]
+        , newGameModal model
+        , endGameModal model
+        ]

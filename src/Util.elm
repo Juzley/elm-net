@@ -7,14 +7,14 @@ rotateList : Int -> List a -> List a
 rotateList count list =
     let
         r =
-            count % (List.length list)
+            count |> modBy (List.length list)
     in
-        List.drop r list ++ List.take r list
+    List.drop r list ++ List.take r list
 
 
 zipList : List a -> List b -> List ( a, b )
 zipList a b =
-    List.map2 (,) a b
+    List.map2 Tuple.pair a b
 
 
 listProduct : List a -> List b -> List ( a, b )
@@ -23,10 +23,10 @@ listProduct xs ys =
 
 
 maybeCall : Maybe a -> b -> (a -> b) -> b
-maybeCall value default callback =
+maybeCall value fallback callback =
     case value of
         Just v ->
             callback v
 
         Nothing ->
-            default
+            fallback
