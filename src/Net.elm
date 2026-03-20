@@ -42,6 +42,12 @@ type alias WindowSize =
     { width : Int, height : Int }
 
 
+type alias HoverInfo =
+    { tilePos : ( Int, Int )
+    , side : Board.HoverSide
+    }
+
+
 type alias Model =
     { mode : GameMode
     , board : Board.Board
@@ -51,6 +57,7 @@ type alias Model =
     , newBoardWrapping : Bool
     , endGameModalState : Modal.Visibility
     , newGameModalState : Modal.Visibility
+    , hover : Maybe HoverInfo
     }
 
 
@@ -64,6 +71,7 @@ init _ =
       , newBoardWrapping = False
       , endGameModalState = Modal.hidden
       , newGameModalState = Modal.hidden
+      , hover = Nothing
       }
     , Task.perform
         (\vp ->
@@ -93,6 +101,8 @@ type Msg
     | CloseEndGameModal
     | CloseNewGameModal
     | ShowNewGameModal
+    | MouseMoveMsg Int Int
+    | MouseLeaveMsg
 
 
 toggleLock : Model -> ( Model, Cmd Msg )
@@ -141,6 +151,40 @@ playingUpdate msg model =
 
         ToggleLockMsg ->
             toggleLock model
+
+        MouseMoveMsg mouseX mouseY ->
+            let
+                tileSize =
+                    model.board.renderSize // model.board.size
+
+                halfSize =
+                    tileSize // 2
+
+                inBounds =
+                    mouseX > 0 && mouseY > 0 && mouseX < model.board.renderSize && mouseY < model.board.renderSize
+
+                newHover =
+                    if inBounds then
+                        let
+                            tilePos =
+                                ( mouseX // tileSize, mouseY // tileSize )
+
+                            side =
+                                if modBy 2 (mouseX // halfSize) == 0 then
+                                    Board.LeftSide
+
+                                else
+                                    Board.RightSide
+                        in
+                        Just { tilePos = tilePos, side = side }
+
+                    else
+                        Nothing
+            in
+            ( { model | hover = newHover }, Cmd.none )
+
+        MouseLeaveMsg ->
+            ( { model | hover = Nothing }, Cmd.none )
 
         TickMsg _ ->
             ( { model | gameTime = model.gameTime + 1 }, Cmd.none )
@@ -471,6 +515,13 @@ boardClickDecoder =
         (Decode.field "offsetY" Decode.int)
 
 
+mouseMoveDecoder : Decode.Decoder Msg
+mouseMoveDecoder =
+    Decode.map2 MouseMoveMsg
+        (Decode.field "offsetX" Decode.int)
+        (Decode.field "offsetY" Decode.int)
+
+
 lockCursor : String
 lockCursor =
     "url(\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><text y='20' font-size='20'>🔒</text></svg>\") 12 12, auto"
@@ -482,8 +533,16 @@ view model =
         board =
             model.board
 
+        hoverInfo =
+            if model.mode == Playing && not model.locking then
+                model.hover
+                    |> Maybe.map (\h -> ( h.tilePos, h.side ))
+
+            else
+                Nothing
+
         render =
-            Board.renderBoard board
+            Board.renderBoard hoverInfo board
 
         cursorStyle =
             if model.mode /= Init && model.locking then
@@ -491,11 +550,20 @@ view model =
 
             else
                 []
+
+        hoverEvents =
+            if model.mode == Playing then
+                [ Html.Events.on "mousemove" mouseMoveDecoder
+                , Html.Events.on "mouseleave" (Decode.succeed MouseLeaveMsg)
+                ]
+
+            else
+                []
     in
     Html.div []
         [ menu model
         , Html.div
-            (Html.Events.on "click" boardClickDecoder :: cursorStyle ++ gameColumn)
+            (Html.Events.on "click" boardClickDecoder :: hoverEvents ++ cursorStyle ++ gameColumn)
             [ render ]
         , newGameModal model
         , endGameModal model
