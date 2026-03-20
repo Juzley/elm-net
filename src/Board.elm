@@ -2,6 +2,7 @@ module Board
     exposing
         ( Board
         , BoardState(..)
+        , HoverSide(..)
         , Position
         , Tile
         , TileType(..)
@@ -36,6 +37,11 @@ type Direction
 type Rotation
     = RotateCW
     | RotateCCW
+
+
+type HoverSide
+    = LeftSide
+    | RightSide
 
 
 type BoardState
@@ -1169,8 +1175,51 @@ renderBarriers board tile tileX tileY =
         |> List.map Tuple.second
 
 
-renderTile : Board -> ( TilePos, Tile ) -> Svg msg
-renderTile board ( ( tx, ty ), tile ) =
+renderHoverOverlay : Board -> HoverSide -> Float -> Float -> List (Svg msg)
+renderHoverOverlay board side tileX tileY =
+    let
+        size =
+            tileSizeFloat board
+
+        halfSize =
+            size / 2
+
+        ( highlightX, arrowX, arrowChar ) =
+            case side of
+                LeftSide ->
+                    ( tileX, tileX + size * 0.15, "\u{21BB}" )
+
+                RightSide ->
+                    ( tileX + halfSize, tileX + size * 0.85, "\u{21BA}" )
+
+        arrowY =
+            tileY + size * 0.15
+
+        fontSize =
+            String.fromFloat (size * 0.22)
+    in
+    [ Svg.rect
+        [ SA.x (String.fromFloat highlightX)
+        , SA.y (String.fromFloat tileY)
+        , SA.width (String.fromFloat halfSize)
+        , SA.height (String.fromFloat size)
+        , SA.fill "rgba(255,255,255,0.15)"
+        ]
+        []
+    , Svg.text_
+        [ SA.x (String.fromFloat arrowX)
+        , SA.y (String.fromFloat arrowY)
+        , SA.fill "white"
+        , SA.fontSize (fontSize ++ "px")
+        , SA.textAnchor "middle"
+        , SA.dominantBaseline "central"
+        ]
+        [ Svg.text arrowChar ]
+    ]
+
+
+renderTile : Maybe ( TilePos, HoverSide ) -> Board -> ( TilePos, Tile ) -> Svg msg
+renderTile hoverInfo board ( ( tx, ty ), tile ) =
     let
         size =
             tileSizeFloat board
@@ -1205,13 +1254,25 @@ renderTile board ( ( tx, ty ), tile ) =
 
             else
                 []
+
+        hoverOverlay =
+            case hoverInfo of
+                Just ( pos, side ) ->
+                    if pos == ( tx, ty ) && not tile.locked then
+                        renderHoverOverlay board side tileX tileY
+
+                    else
+                        []
+
+                Nothing ->
+                    []
     in
     Svg.g []
-        (background ++ connections ++ foreground ++ barriers ++ lockOverlay)
+        (background ++ connections ++ foreground ++ barriers ++ lockOverlay ++ hoverOverlay)
 
 
-renderBoard : Board -> Svg msg
-renderBoard board =
+renderBoard : Maybe ( TilePos, HoverSide ) -> Board -> Svg msg
+renderBoard hoverInfo board =
     let
         tiles =
             Dict.toList board.tiles
@@ -1224,4 +1285,4 @@ renderBoard board =
         , SA.height sizeStr
         , SA.viewBox ("0 0 " ++ sizeStr ++ " " ++ sizeStr)
         ]
-        (List.map (renderTile board) tiles)
+        (List.map (renderTile hoverInfo board) tiles)
