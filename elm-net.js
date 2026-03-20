@@ -5475,6 +5475,7 @@ var $author$project$Net$init = function (_v0) {
 			board: A2($author$project$Board$emptyBoard, $author$project$Net$defaultBoardSize, 600),
 			endGameModalState: $rundis$elm_bootstrap$Bootstrap$Modal$hidden,
 			gameTime: 0,
+			hover: $elm$core$Maybe$Nothing,
 			locking: false,
 			mode: $author$project$Net$Init,
 			newBoardSize: $author$project$Net$defaultBoardSize,
@@ -7508,6 +7509,8 @@ var $elm$random$Random$initialSeed = function (x) {
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
 var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
 var $author$project$Net$GameOver = {$: 'GameOver'};
+var $author$project$Board$LeftSide = {$: 'LeftSide'};
+var $author$project$Board$RightSide = {$: 'RightSide'};
 var $author$project$Board$RotateCCW = {$: 'RotateCCW'};
 var $author$project$Board$RotateCW = {$: 'RotateCW'};
 var $author$project$Board$tileSizeInt = function (board) {
@@ -7689,6 +7692,33 @@ var $author$project$Net$playingUpdate = F2(
 				}
 			case 'ToggleLockMsg':
 				return $author$project$Net$toggleLock(model);
+			case 'MouseMoveMsg':
+				var mouseX = msg.a;
+				var mouseY = msg.b;
+				var tileSize = (model.board.renderSize / model.board.size) | 0;
+				var inBounds = (mouseX > 0) && ((mouseY > 0) && ((_Utils_cmp(mouseX, model.board.renderSize) < 0) && (_Utils_cmp(mouseY, model.board.renderSize) < 0)));
+				var halfSize = (tileSize / 2) | 0;
+				var newHover = function () {
+					if (inBounds) {
+						var tilePos = _Utils_Tuple2((mouseX / tileSize) | 0, (mouseY / tileSize) | 0);
+						var side = (!A2($elm$core$Basics$modBy, 2, (mouseX / halfSize) | 0)) ? $author$project$Board$LeftSide : $author$project$Board$RightSide;
+						return $elm$core$Maybe$Just(
+							{side: side, tilePos: tilePos});
+					} else {
+						return $elm$core$Maybe$Nothing;
+					}
+				}();
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{hover: newHover}),
+					$elm$core$Platform$Cmd$none);
+			case 'MouseLeaveMsg':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{hover: $elm$core$Maybe$Nothing}),
+					$elm$core$Platform$Cmd$none);
 			case 'TickMsg':
 				return _Utils_Tuple2(
 					_Utils_update(
@@ -7787,6 +7817,7 @@ var $author$project$Net$update = F2(
 				}
 		}
 	});
+var $author$project$Net$MouseLeaveMsg = {$: 'MouseLeaveMsg'};
 var $author$project$Net$BoardClickMsg = F2(
 	function (a, b) {
 		return {$: 'BoardClickMsg', a: a, b: b};
@@ -8706,6 +8737,15 @@ var $author$project$Net$menu = function (model) {
 		]);
 	return A2($elm$html$Html$div, $author$project$Net$menuColumn, contents);
 };
+var $author$project$Net$MouseMoveMsg = F2(
+	function (a, b) {
+		return {$: 'MouseMoveMsg', a: a, b: b};
+	});
+var $author$project$Net$mouseMoveDecoder = A3(
+	$elm$json$Json$Decode$map2,
+	$author$project$Net$MouseMoveMsg,
+	A2($elm$json$Json$Decode$field, 'offsetX', $elm$json$Json$Decode$int),
+	A2($elm$json$Json$Decode$field, 'offsetY', $elm$json$Json$Decode$int));
 var $author$project$Net$BoardSizeMsg = function (a) {
 	return {$: 'BoardSizeMsg', a: a};
 };
@@ -9104,6 +9144,63 @@ var $author$project$Board$renderForeground = F4(
 				]) : _List_Nil;
 		}
 	});
+var $elm$svg$Svg$Attributes$dominantBaseline = _VirtualDom_attribute('dominant-baseline');
+var $elm$svg$Svg$Attributes$fontSize = _VirtualDom_attribute('font-size');
+var $elm$svg$Svg$text = $elm$virtual_dom$VirtualDom$text;
+var $elm$svg$Svg$Attributes$textAnchor = _VirtualDom_attribute('text-anchor');
+var $elm$svg$Svg$text_ = $elm$svg$Svg$trustedNode('text');
+var $author$project$Board$renderHoverOverlay = F4(
+	function (board, side, tileX, tileY) {
+		var size = $author$project$Board$tileSizeFloat(board);
+		var halfSize = size / 2;
+		var fontSize = $elm$core$String$fromFloat(size * 0.22);
+		var arrowY = tileY + (size * 0.15);
+		var _v0 = function () {
+			if (side.$ === 'LeftSide') {
+				return _Utils_Tuple3(tileX, tileX + (size * 0.15), '\u21BB');
+			} else {
+				return _Utils_Tuple3(tileX + halfSize, tileX + (size * 0.85), '\u21BA');
+			}
+		}();
+		var highlightX = _v0.a;
+		var arrowX = _v0.b;
+		var arrowChar = _v0.c;
+		return _List_fromArray(
+			[
+				A2(
+				$elm$svg$Svg$rect,
+				_List_fromArray(
+					[
+						$elm$svg$Svg$Attributes$x(
+						$elm$core$String$fromFloat(highlightX)),
+						$elm$svg$Svg$Attributes$y(
+						$elm$core$String$fromFloat(tileY)),
+						$elm$svg$Svg$Attributes$width(
+						$elm$core$String$fromFloat(halfSize)),
+						$elm$svg$Svg$Attributes$height(
+						$elm$core$String$fromFloat(size)),
+						$elm$svg$Svg$Attributes$fill('rgba(255,255,255,0.15)')
+					]),
+				_List_Nil),
+				A2(
+				$elm$svg$Svg$text_,
+				_List_fromArray(
+					[
+						$elm$svg$Svg$Attributes$x(
+						$elm$core$String$fromFloat(arrowX)),
+						$elm$svg$Svg$Attributes$y(
+						$elm$core$String$fromFloat(arrowY)),
+						$elm$svg$Svg$Attributes$fill('white'),
+						$elm$svg$Svg$Attributes$fontSize(fontSize + 'px'),
+						$elm$svg$Svg$Attributes$textAnchor('middle'),
+						$elm$svg$Svg$Attributes$dominantBaseline('central')
+					]),
+				_List_fromArray(
+					[
+						$elm$svg$Svg$text(arrowChar)
+					]))
+			]);
+	});
 var $elm$svg$Svg$Attributes$opacity = _VirtualDom_attribute('opacity');
 var $author$project$Board$renderLock = F3(
 	function (board, tileX, tileY) {
@@ -9125,8 +9222,8 @@ var $author$project$Board$renderLock = F3(
 				]),
 			_List_Nil);
 	});
-var $author$project$Board$renderTile = F2(
-	function (board, _v0) {
+var $author$project$Board$renderTile = F3(
+	function (hoverInfo, board, _v0) {
 		var _v1 = _v0.a;
 		var tx = _v1.a;
 		var ty = _v1.b;
@@ -9138,6 +9235,18 @@ var $author$project$Board$renderTile = F2(
 			[
 				A3($author$project$Board$renderLock, board, tileX, tileY)
 			]) : _List_Nil;
+		var hoverOverlay = function () {
+			if (hoverInfo.$ === 'Just') {
+				var _v3 = hoverInfo.a;
+				var pos = _v3.a;
+				var side = _v3.b;
+				return (_Utils_eq(
+					pos,
+					_Utils_Tuple2(tx, ty)) && (!tile.locked)) ? A4($author$project$Board$renderHoverOverlay, board, side, tileX, tileY) : _List_Nil;
+			} else {
+				return _List_Nil;
+			}
+		}();
 		var cy = tileY + (size / 2);
 		var cx = tileX + (size / 2);
 		var foreground = A4($author$project$Board$renderForeground, board, tile, cx, cy);
@@ -9153,33 +9262,50 @@ var $author$project$Board$renderTile = F2(
 					connections,
 					_Utils_ap(
 						foreground,
-						_Utils_ap(barriers, lockOverlay)))));
+						_Utils_ap(
+							barriers,
+							_Utils_ap(lockOverlay, hoverOverlay))))));
 	});
 var $elm$svg$Svg$svg = $elm$svg$Svg$trustedNode('svg');
 var $elm$svg$Svg$Attributes$viewBox = _VirtualDom_attribute('viewBox');
-var $author$project$Board$renderBoard = function (board) {
-	var tiles = $elm$core$Dict$toList(board.tiles);
-	var sizeStr = $elm$core$String$fromInt(board.renderSize);
-	return A2(
-		$elm$svg$Svg$svg,
-		_List_fromArray(
-			[
-				$elm$svg$Svg$Attributes$width(sizeStr),
-				$elm$svg$Svg$Attributes$height(sizeStr),
-				$elm$svg$Svg$Attributes$viewBox('0 0 ' + (sizeStr + (' ' + sizeStr)))
-			]),
-		A2(
-			$elm$core$List$map,
-			$author$project$Board$renderTile(board),
-			tiles));
-};
+var $author$project$Board$renderBoard = F2(
+	function (hoverInfo, board) {
+		var tiles = $elm$core$Dict$toList(board.tiles);
+		var sizeStr = $elm$core$String$fromInt(board.renderSize);
+		return A2(
+			$elm$svg$Svg$svg,
+			_List_fromArray(
+				[
+					$elm$svg$Svg$Attributes$width(sizeStr),
+					$elm$svg$Svg$Attributes$height(sizeStr),
+					$elm$svg$Svg$Attributes$viewBox('0 0 ' + (sizeStr + (' ' + sizeStr)))
+				]),
+			A2(
+				$elm$core$List$map,
+				A2($author$project$Board$renderTile, hoverInfo, board),
+				tiles));
+	});
 var $author$project$Net$view = function (model) {
+	var hoverInfo = (_Utils_eq(model.mode, $author$project$Net$Playing) && (!model.locking)) ? A2(
+		$elm$core$Maybe$map,
+		function (h) {
+			return _Utils_Tuple2(h.tilePos, h.side);
+		},
+		model.hover) : $elm$core$Maybe$Nothing;
+	var hoverEvents = _Utils_eq(model.mode, $author$project$Net$Playing) ? _List_fromArray(
+		[
+			A2($elm$html$Html$Events$on, 'mousemove', $author$project$Net$mouseMoveDecoder),
+			A2(
+			$elm$html$Html$Events$on,
+			'mouseleave',
+			$elm$json$Json$Decode$succeed($author$project$Net$MouseLeaveMsg))
+		]) : _List_Nil;
 	var cursorStyle = ((!_Utils_eq(model.mode, $author$project$Net$Init)) && model.locking) ? _List_fromArray(
 		[
 			A2($elm$html$Html$Attributes$style, 'cursor', $author$project$Net$lockCursor)
 		]) : _List_Nil;
 	var board = model.board;
-	var render = $author$project$Board$renderBoard(board);
+	var render = A2($author$project$Board$renderBoard, hoverInfo, board);
 	return A2(
 		$elm$html$Html$div,
 		_List_Nil,
@@ -9191,7 +9317,9 @@ var $author$project$Net$view = function (model) {
 				A2(
 					$elm$core$List$cons,
 					A2($elm$html$Html$Events$on, 'click', $author$project$Net$boardClickDecoder),
-					_Utils_ap(cursorStyle, $author$project$Net$gameColumn)),
+					_Utils_ap(
+						hoverEvents,
+						_Utils_ap(cursorStyle, $author$project$Net$gameColumn))),
 				_List_fromArray(
 					[render])),
 				$author$project$Net$newGameModal(model),
